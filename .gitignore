@@ -1,0 +1,23 @@
+# Catalogue outputs and state. These belong in the image library, never here.
+catalog.json
+catalog.csv
+review_queue.csv
+wiki.html
+!templates/wiki.html
+.catalog_state.json
+
+# Never commit reference images.
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.tif
+*.tiff
+*.bmp
+*.gif
+
+# Standalone build output.
+dist/
+
+__pycache__/
+*.pyc
