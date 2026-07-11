@@ -61,6 +61,25 @@ input[type=text]::placeholder{color:var(--faint);}
 .emptyside{padding:60px 22px;color:var(--faint);font-size:13px;text-align:center;}
 .navhint{color:var(--faint);font-size:11px;margin-top:18px;border-top:1px solid var(--line);padding-top:10px;}
 .empty{color:var(--faint);padding:44px 24px;grid-column:1/-1;}
+/* folders */
+.folders{width:214px;flex:none;background:var(--surface);border-right:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;}
+.foldhead{padding:16px 14px 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);flex:none;}
+.foldtree{padding:0 6px 30px;}
+.fnode{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--muted);white-space:nowrap;}
+.fnode:hover{background:var(--surface2);color:var(--ink);}
+.fnode.on{background:var(--surface2);color:var(--brass);}
+.fcar{width:12px;flex:none;color:var(--faint);font-size:10px;text-align:center;}
+.fname{overflow:hidden;text-overflow:ellipsis;}
+.fcount{margin-left:auto;color:var(--faint);font-size:11px;padding-left:8px;}
+.foldbtn{background:none;border:1px solid var(--line2);color:var(--muted);font:inherit;font-size:14px;line-height:1;padding:7px 11px;border-radius:7px;cursor:pointer;}
+.foldbtn:hover{color:var(--ink);border-color:var(--brass);}
+.foldbtn.on{color:var(--brass);border-color:var(--brass);}
+.crumbs{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;color:var(--muted);margin-top:11px;}
+.crumb{cursor:pointer;color:var(--brass);}
+.crumb:hover{text-decoration:underline;}
+.crumb.cur{color:var(--muted);cursor:default;}
+.crumb.cur:hover{text-decoration:none;}
+.csep{color:var(--faint);}
 /* styles view */
 .styles{padding:18px 28px 60px;max-width:860px;}
 .tl{margin:6px 0 30px;}
@@ -87,6 +106,7 @@ input[type=text]::placeholder{color:var(--faint);}
   .app{flex-direction:column;height:auto;}
   .divider{display:none;}
   .side{width:auto;border-top:1px solid var(--line);}
+  .folders{width:auto;max-height:200px;border-right:none;border-bottom:1px solid var(--line);}
   .scroll{overflow:visible;}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
@@ -94,6 +114,10 @@ input[type=text]::placeholder{color:var(--faint);}
 </head>
 <body>
 <div class="app">
+  <aside class="folders" id="folders">
+    <div class="foldhead">Folders</div>
+    <div class="foldtree" id="foldtree"></div>
+  </aside>
   <div class="left">
     <header>
       <div class="eyebrow">Reference library</div>
@@ -105,6 +129,7 @@ input[type=text]::placeholder{color:var(--faint);}
         </div>
       </div>
       <div class="controls" id="workcontrols">
+        <button class="foldbtn on" id="foldbtn" title="Show or hide the folder tree" aria-label="Toggle folder tree">&#9776;</button>
         <input id="q" type="text" placeholder="Search artist, movement, mood, tag">
         <select id="mv" aria-label="Filter by movement"></select>
         <select id="sort" aria-label="Sort by">
@@ -115,6 +140,7 @@ input[type=text]::placeholder{color:var(--faint);}
         </select>
         <label class="chk"><input id="rv" type="checkbox"> needs review</label>
       </div>
+      <div class="crumbs" id="crumbs"></div>
     </header>
     <div class="count" id="count"></div>
     <div class="scroll" id="scroll">
@@ -128,10 +154,13 @@ input[type=text]::placeholder{color:var(--faint);}
 <script>
 const DATA = __DATA__;
 const INFO = __INFO__;
+const ROOT = __ROOT__;
 const CONF = {given:'#8fb08a',high:'#8fb08a',medium:'#d08a3c',low:'#c56b5c',unknown:'#6f6c64'};
 function imgsrc(p){return encodeURI(String(p||'').replace(/\\/g,'/'));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function tagsOf(r){const t=r.tags;if(Array.isArray(t))return t;if(!t)return[];return String(t).split(',').map(s=>s.trim()).filter(Boolean);}
+function normPath(p){return String(p==null?'':p).replace(/\\/g,'/');}
+function foldersOf(r){const parts=normPath(r.path).split('/');parts.pop();return parts.filter(Boolean);}
 function surnameOf(r){const a=(r.artist||'').trim();if(!a)return'\uffff';const parts=a.replace(/[.,]/g,'').split(/\s+/);return (parts[parts.length-1]||'\uffff').toLowerCase();}
 function nameOf(r){return (r.artist||'\uffff').toLowerCase();}
 function yearOf(r){const m=String(r.date_or_period||'').match(/\d{4}/);return m?+m[0]:9999;}
@@ -142,11 +171,13 @@ const SORTERS={
   year:(a,b)=>yearOf(DATA[a])-yearOf(DATA[b])||nameOf(DATA[a]).localeCompare(nameOf(DATA[b]))
 };
 let sel=-1, curOrder=[];
+let curFolder=[], expanded=new Set(), foldHidden=false, TREE=null;
 function matches(r){
   const q=document.getElementById('q').value.trim().toLowerCase();
   const mv=document.getElementById('mv').value;
   const rv=document.getElementById('rv').checked;
   if(rv&&!r.needs_review)return false;
+  if(curFolder.length){const fp=foldersOf(r);for(let i=0;i<curFolder.length;i++){if(fp[i]!==curFolder[i])return false;}}
   if(mv!=='all'&&r.movement!==mv)return false;
   if(!q)return true;
   return [r.artist,r.title,r.movement,r.movement_detail,r.subject,r.palette,tagsOf(r).join(' '),r.context].join(' ').toLowerCase().includes(q);
@@ -204,12 +235,62 @@ function step(d){
   const next=pos<0?(d>0?0:curOrder.length-1):Math.min(curOrder.length-1,Math.max(0,pos+d));
   select(curOrder[next]);
 }
+/* folders */
+function buildTree(){
+  const root={children:{},count:0};
+  DATA.forEach(r=>{
+    let node=root;node.count++;
+    foldersOf(r).forEach(seg=>{
+      if(!node.children[seg])node.children[seg]={children:{},count:0};
+      node=node.children[seg];node.count++;
+    });
+  });
+  return root;
+}
+function renderTree(){
+  const el=document.getElementById('foldtree');if(!el||!TREE)return;
+  let html='<div class="fnode'+(curFolder.length===0?' on':'')+'" data-path=""><span class="fcar"></span><span class="fname">All works</span><span class="fcount">'+TREE.count+'</span></div>';
+  (function walk(node,prefix,depth){
+    Object.keys(node.children).sort((a,b)=>a.localeCompare(b)).forEach(k=>{
+      const child=node.children[k], arr=prefix.concat([k]), key=arr.join('/');
+      const hasKids=Object.keys(child.children).length>0, isExp=expanded.has(key);
+      const car=hasKids?(isExp?'▾':'▸'):'';
+      html+='<div class="fnode'+(curFolder.join('/')===key?' on':'')+'" data-path="'+esc(key)+'" style="padding-left:'+(6+depth*13)+'px">'
+        +'<span class="fcar">'+car+'</span><span class="fname">'+esc(k)+'</span><span class="fcount">'+child.count+'</span></div>';
+      if(hasKids&&isExp)walk(child,arr,depth+1);
+    });
+  })(TREE,[],0);
+  el.innerHTML=html;
+  el.querySelectorAll('.fnode').forEach(n=>n.addEventListener('click',e=>{
+    const key=n.dataset.path, arr=key?key.split('/'):[];
+    if(e.target&&e.target.classList.contains('fcar')&&e.target.textContent){
+      if(expanded.has(key))expanded.delete(key);else expanded.add(key);renderTree();
+    }else{setFolder(arr);}
+  }));
+}
+function renderCrumbs(){
+  const el=document.getElementById('crumbs');if(!el)return;
+  let html='<span class="crumb'+(curFolder.length===0?' cur':'')+'" data-i="0">'+esc(ROOT)+'</span>';
+  curFolder.forEach((seg,i)=>{
+    html+='<span class="csep">›</span><span class="crumb'+(i===curFolder.length-1?' cur':'')+'" data-i="'+(i+1)+'">'+esc(seg)+'</span>';
+  });
+  el.innerHTML=html;
+  el.querySelectorAll('.crumb').forEach(c=>c.addEventListener('click',()=>setFolder(curFolder.slice(0,+c.dataset.i))));
+}
+function setFolder(arr){
+  curFolder=arr.slice();sel=-1;
+  for(let i=1;i<=arr.length;i++)expanded.add(arr.slice(0,i).join('/'));
+  renderTree();renderCrumbs();renderGrid();renderSide();
+}
 /* views */
 function setView(v){
   document.getElementById('grid').style.display=v==='works'?'':'none';
   document.getElementById('workcontrols').style.display=v==='works'?'':'none';
   document.getElementById('count').style.visibility=v==='works'?'':'hidden';
   document.getElementById('styles').style.display=v==='styles'?'':'none';
+  const hasFold=TREE&&Object.keys(TREE.children).length>0;
+  document.getElementById('folders').style.display=(v==='works'&&hasFold&&!foldHidden)?'':'none';
+  document.getElementById('crumbs').style.display=(v==='works'&&hasFold)?'':'none';
   document.getElementById('vworks').classList.toggle('on',v==='works');
   document.getElementById('vstyles').classList.toggle('on',v==='styles');
   if(v==='styles')renderStyles();
@@ -279,6 +360,15 @@ function renderStyles(){
   const movs=Array.from(new Set(DATA.map(r=>r.movement).filter(Boolean))).sort();
   document.getElementById('mv').innerHTML='<option value="all">All movements</option>'+movs.map(m=>'<option>'+esc(m)+'</option>').join('');
   ['q','mv','rv','sort'].forEach(id=>document.getElementById(id).addEventListener('input',renderGrid));
+  TREE=buildTree();
+  const hasFold=Object.keys(TREE.children).length>0;
+  ['folders','foldbtn','crumbs'].forEach(id=>{document.getElementById(id).style.display=hasFold?'':'none';});
+  document.getElementById('foldbtn').addEventListener('click',()=>{
+    foldHidden=!foldHidden;
+    document.getElementById('foldbtn').classList.toggle('on',!foldHidden);
+    document.getElementById('folders').style.display=foldHidden?'none':'';
+  });
+  renderTree();renderCrumbs();
   document.getElementById('vworks').addEventListener('click',()=>setView('works'));
   document.getElementById('vstyles').addEventListener('click',()=>setView('styles'));
   document.addEventListener('keydown',e=>{

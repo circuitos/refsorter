@@ -54,6 +54,7 @@ STATE_FILE = ".catalog_state.json"
 CATALOG_FILE = "catalog.json"
 CATALOG_CSV = "catalog.csv"
 REVIEW_CSV = "review_queue.csv"
+WIKI_FILE = "wiki.html"
 
 CSV_COLUMNS = [
     "path", "artist", "artist_confidence", "attribution_source", "title",
@@ -334,28 +335,125 @@ def ask(prompt):
         return ""
 
 
+def load_catalog(root):
+    catalog = load_json(Path(root) / CATALOG_FILE, {})
+    for rec in catalog.values():
+        clean_record(rec)
+    return catalog
+
+
+def find_library_root(start):
+    """Nearest folder at or above `start` that already holds a catalogue.
+
+    This is what lets a run on a subfolder grow the master catalogue at the
+    library root instead of spawning a separate one beside the images.
+    """
+    start = Path(start).resolve()
+    for d in (start, *start.parents):
+        if (d / CATALOG_FILE).exists():
+            return d
+    return None
+
+
+def reposition_library(old_root, new_root):
+    """Move a library to `new_root`, rewriting every image path so the links
+    still resolve from the new location. The old output files are kept as
+    `.bak`. Returns the remapped catalogue, or None if cancelled.
+    """
+    old_root, new_root = Path(old_root).resolve(), Path(new_root).resolve()
+    catalog = load_catalog(old_root)
+    remapped, dropped = {}, []
+    for rec in catalog.values():
+        abs_path = (old_root / rec.get("path", "")).resolve()
+        try:
+            new_rel = str(abs_path.relative_to(new_root))
+        except ValueError:
+            dropped.append(rec.get("path", ""))
+            continue
+        rec["path"] = new_rel
+        remapped[new_rel] = rec
+    if dropped:
+        print(f"\n  Warning: {len(dropped)} image(s) sit outside {new_root}")
+        print("  and would lose their links. For example:")
+        for p in dropped[:5]:
+            print(f"    {p}")
+        if ask("  Move anyway, dropping those? [y/N]\n  > ").strip().lower() not in ("y", "yes"):
+            print("  Reposition cancelled; nothing changed.")
+            return None
+    new_root.mkdir(parents=True, exist_ok=True)
+    if old_root != new_root:
+        for name in (CATALOG_FILE, CATALOG_CSV, REVIEW_CSV, WIKI_FILE, STATE_FILE):
+            src = old_root / name
+            if src.exists():
+                src.replace(src.with_name(src.name + ".bak"))
+    save_json(new_root / CATALOG_FILE, remapped)
+    write_csvs(new_root, remapped)
+    write_wiki(new_root, remapped)
+    return remapped
+
+
+def resolve_library(scan_root):
+    """Work out which library this run writes to, honouring an existing one.
+
+    Returns (lib_root, catalog, finished). `finished` is True when the chosen
+    action (e.g. repositioning) is complete on its own and no run should follow.
+    """
+    detected = find_library_root(scan_root)
+    if detected:
+        print(f"\n  Existing library found at:\n    {detected}")
+        print("  What would you like to do?")
+        print("    [Enter] Add these results to it  (recommended)")
+        print("    r)      Move this library to another folder (fixes image links)")
+        print("    n)      Start a separate new library at the scanned folder")
+        pick = ask("  > ").strip().lower()
+        if pick == "r":
+            dest_in = ask("  Move the library to which folder?\n  > ").strip().strip('"')
+            if not dest_in:
+                print("  No folder given; leaving the library where it is.")
+                return detected, load_catalog(detected), False
+            dest = Path(dest_in).expanduser().resolve()
+            remapped = reposition_library(detected, dest)
+            if remapped is None:
+                return detected, load_catalog(detected), True
+            print(f"\n  Library moved to {dest} ({len(remapped)} records, links fixed).")
+            return dest, remapped, True
+        if pick == "n":
+            root = Path(scan_root).resolve()
+            return root, load_catalog(root), False
+        return detected, load_catalog(detected), False
+
+    print("\n  No existing library found at or above this folder.")
+    dest_in = ask(f"  Create the catalogue where?\n    [Enter = {scan_root}]\n  > ").strip().strip('"')
+    root = Path(dest_in or scan_root).expanduser().resolve()
+    return root, load_catalog(root), False
+
+
 def main():
     print("\n  Reference-library cataloguer")
     print("  " + "-" * 30)
-    root_in = ask(f"  Folder to catalogue\n    [Enter = {DEFAULT_ROOT}]\n  > ").strip().strip('"')
-    root = Path(root_in or DEFAULT_ROOT).expanduser()
-    if not root.is_dir():
-        print(f"\n  Can't find that folder: {root}")
+    scan_in = ask(f"  Folder to catalogue\n    [Enter = {DEFAULT_ROOT}]\n  > ").strip().strip('"')
+    scan_root = Path(scan_in or DEFAULT_ROOT).expanduser()
+    if not scan_root.is_dir():
+        print(f"\n  Can't find that folder: {scan_root}")
         print("  Check the path and run it again.")
         return
-    root = root.resolve()
-    out_dir = root
-    catalog = load_json(out_dir / CATALOG_FILE, {})
-    for rec in catalog.values():
-        clean_record(rec)
+    scan_root = scan_root.resolve()
+
+    lib_root, catalog, finished = resolve_library(scan_root)
+    if finished:
+        return
+    root = lib_root        # image paths are stored relative to the library root
+    out_dir = lib_root     # the catalogue and viewer live at the library root
 
     sub = ask("  Include images inside subfolders too? [Y/n]\n  > ").strip().lower()
     recurse = not sub.startswith("n")
 
     print("\n  Scanning for images...")
-    images = discover_images(root, recurse)
+    images = discover_images(scan_root, recurse)
     scope = "including subfolders" if recurse else "top level only"
     print(f"  Found {len(images):,} image file(s) ({scope}).")
+    if scan_root != lib_root:
+        print(f"  These will be added to the library at: {lib_root}")
 
     print("\n  What would you like to do?")
     print("    1) Estimate the cost   (free, no API key, no charge)")

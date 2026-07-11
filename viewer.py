@@ -25,8 +25,10 @@ def write_wiki(out_dir, catalog):
     records = list(catalog.values())
     data_json = json.dumps(records, ensure_ascii=False).replace("</", "<\\/")
     info_json = json.dumps(MOVEMENT_INFO, ensure_ascii=False).replace("</", "<\\/")
+    root_json = json.dumps(Path(out_dir).name or "Library", ensure_ascii=False)
     html = (_template().replace("__DATA__", data_json)
             .replace("__INFO__", info_json)
+            .replace("__ROOT__", root_json)
             .replace("__COUNT__", str(len(records))))
     path = Path(out_dir) / "wiki.html"
     with open(path, "w", encoding="utf-8") as f:

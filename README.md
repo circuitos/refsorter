@@ -47,7 +47,13 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 python catalog_refs.py
 ```
 
-It asks for the folder, whether to include subfolders, and what to do:
+It asks for the folder to catalogue, whether to include subfolders, and what to
+do. One catalogue can span a whole library: if the folder you point at sits
+inside a folder that already has a `catalog.json`, the tool grows that existing
+library instead of starting a separate one, so you can catalogue a subfolder at
+a time and everything lands in one master viewer at the root. You can also move
+an existing library to another folder (image links are fixed automatically) or
+start a fresh one. The menu options:
 
 1. **Estimate the cost.** Free, no API key used, nothing sent anywhere.
 2. **Test run on 25 images.** A small charge, to check the quality first.
@@ -92,6 +98,10 @@ These are deliberate. Changes should not break them.
 
 - Images are never moved, renamed, or overwritten. Outputs go into the
   library root only.
+- Image paths are stored relative to the library root, and a run on a subfolder
+  grows the nearest existing library at or above it (`find_library_root`), so
+  the whole tree shares one master catalogue and one viewer. Moving a library
+  (`reposition_library`) rewrites those relative paths so links keep resolving.
 - `wiki.html` stays one self-contained file that works over `file://` with
   zero network dependencies. It references images by relative path, which is
   why it must live in the library root.
