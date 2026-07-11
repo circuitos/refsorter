@@ -13,6 +13,8 @@ from record_schema import MOVEMENT_CANON, RECORD_TOOL
 _MOVEMENT_RULES = [
     ("contemporary", "Contemporary"), ("post-soviet", "Contemporary"),
     ("socialist", "Socialist Realism"),
+    ("shin-hanga", "Shin-hanga"), ("shin hanga", "Shin-hanga"),
+    ("ukiyo", "Ukiyo-e"),
     ("post-impression", "Post-Impressionism"),
     ("impressioni", "Impressionism"),
     ("symbolis", "Symbolism"), ("tonalis", "Tonalism"),

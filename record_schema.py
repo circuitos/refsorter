@@ -6,11 +6,12 @@ INFO entry (years, blurb, wiki slug); "Other" alone has null years and wiki.
 """
 
 MOVEMENT_CANON = [
-    "Medieval & Gothic", "Renaissance", "Mannerism", "Baroque", "Rococo",
-    "Neoclassicism", "Romanticism", "Academic art", "Realism", "Impressionism",
-    "Post-Impressionism", "Symbolism", "Tonalism", "Art Nouveau", "Expressionism",
-    "Fauvism", "Cubism", "Futurism", "Abstract art", "Surrealism",
-    "Socialist Realism", "Naive art", "Contemporary", "Other",
+    "Medieval & Gothic", "Renaissance", "Mannerism", "Baroque", "Ukiyo-e",
+    "Rococo", "Neoclassicism", "Romanticism", "Academic art", "Realism",
+    "Impressionism", "Post-Impressionism", "Symbolism", "Tonalism",
+    "Art Nouveau", "Expressionism", "Shin-hanga", "Fauvism", "Cubism",
+    "Futurism", "Abstract art", "Surrealism", "Socialist Realism",
+    "Naive art", "Contemporary", "Other",
 ]
 
 MOVEMENT_INFO = {
@@ -22,6 +23,8 @@ MOVEMENT_INFO = {
         "blurb": "The generation after Raphael stretches the rules: elongated figures, acid colour, crowded unstable compositions, virtuosity for its own sake. Elegance and artifice over balance. Pontormo, Bronzino, El Greco."},
     "Baroque": {"years": [1600, 1730], "wiki": "Baroque_painting",
         "blurb": "Drama as doctrine: raking light, deep shadow, diagonal movement, theatrical immediacy. Caravaggio's tenebrism, Rubens's flesh, Rembrandt's introspection. Painting built to overwhelm and persuade."},
+    "Ukiyo-e": {"years": [1620, 1900], "wiki": "Ukiyo-e",
+        "blurb": "Pictures of the floating world: Edo woodblock prints of actors, courtesans, landscapes and legends. Flat colour inside a decisive keyline, radical cropping, graded bokashi skies. Hokusai's waves and Hiroshige's stations reshaped Western art the moment they reached Paris."},
     "Rococo": {"years": [1720, 1780], "wiki": "Rococo",
         "blurb": "Baroque gone lightweight and private: pastel palettes, curling forms, fetes galantes and boudoir mythology. Watteau, Boucher, Fragonard. Decoration, flirtation, and brushwork of feathery speed."},
     "Neoclassicism": {"years": [1760, 1830], "wiki": "Neoclassicism",
@@ -44,6 +47,8 @@ MOVEMENT_INFO = {
         "blurb": "Design invades painting: whiplash line, flattened ornament, botanical arabesque. Klimt and Mucha fuse figure, pattern and gold into decorative total works."},
     "Expressionism": {"years": [1905, 1935], "wiki": "Expressionism",
         "blurb": "Colour and distortion as raw feeling: Die Brucke's jagged cities, Kandinsky's road toward abstraction, Schiele's nerves. The world painted as it presses on the psyche."},
+    "Shin-hanga": {"years": [1915, 1962], "wiki": "Shin-hanga",
+        "blurb": "The 'new prints' revival: publisher-led woodblock art fusing ukiyo-e craft with Western light and perspective. Hasui's twilit streets and Yoshida's mountain series build painterly atmosphere from dozens of hand-printed colour blocks - travel, weather and nostalgia as the ruling subjects."},
     "Fauvism": {"years": [1904, 1910], "wiki": "Fauvism",
         "blurb": "The wild beasts: colour unchained from description. Matisse and Derain paint red trees and green faces. A short blaze that permanently freed the palette."},
     "Cubism": {"years": [1907, 1920], "wiki": "Cubism",
