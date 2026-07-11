@@ -51,9 +51,9 @@ def main():
     for line, body in [
         ("from record_schema import SYSTEM, RECORD_TOOL\n", banner("record schema") + module_body("record_schema")),
         ("from cleaning import clean_record\n", banner("record cleaning") + module_body("cleaning")),
-        ("from artists import ensure_artists, folder_hints\n", banner("artist database") + module_body("artists")),
+        ("from artists import ARTISTS_FILE, DB_DIR, db_dir, ensure_artists, folder_hints\n", banner("artist database") + module_body("artists")),
         ("from viewer import write_wiki\n", banner("wiki viewer") + viewer_src),
-        ("from sorter import run_sort, undo_sort\n", banner("painter-folder sorter") + module_body("sorter")),
+        ("from sorter import run_sort, undo_sort, PLAN_FILE, UNDO_FILE\n", banner("painter-folder sorter") + module_body("sorter")),
     ]:
         if out.count(line) != 1:
             raise SystemExit("expected exactly one line %r in catalog_refs.py" % line)

@@ -22,7 +22,7 @@ import csv
 import os
 from pathlib import Path
 
-from artists import ARTISTS_FILE, _load_json, _save_json, ensure_artists, folder_hints, norm, roster_years, split_folder_years  # noqa: E501 - one line so the standalone build can strip it
+from artists import ARTISTS_FILE, DB_DIR, _load_json, _save_json, db_dir, ensure_artists, folder_hints, norm, roster_years, split_folder_years  # noqa: E501 - one line so the standalone build can strip it
 
 PLAN_FILE = "sort_plan.csv"
 UNDO_FILE = "sort_undo.json"
@@ -156,7 +156,7 @@ def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years):
 
 
 def write_plan(lib_root, rows):
-    path = Path(lib_root) / PLAN_FILE
+    path = db_dir(lib_root) / PLAN_FILE
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=PLAN_COLUMNS, extrasaction="ignore")
         w.writeheader()
@@ -190,9 +190,9 @@ def apply_plan(lib_root, catalog, rebuild):
     """Execute sort_plan.csv (honouring any edits), journal every operation to
     sort_undo.json, then re-key the catalogue and rebuild the outputs."""
     lib_root = Path(lib_root)
-    plan_path = lib_root / PLAN_FILE
+    plan_path = Path(lib_root) / DB_DIR / PLAN_FILE
     if not plan_path.exists():
-        print("\n  No %s here. Build a plan first (option 5)." % PLAN_FILE)
+        print("\n  No %s here. Build a plan first (option 5)." % os.path.join(DB_DIR, PLAN_FILE))
         return
     with open(plan_path, "r", encoding="utf-8-sig", newline="") as f:
         plan = list(csv.DictReader(f))
@@ -230,7 +230,7 @@ def apply_plan(lib_root, catalog, rebuild):
     if not ops:
         print("\n  Nothing could be applied (sources missing?). Rebuild the plan.")
         return
-    _save_json(lib_root / UNDO_FILE, {"ops": ops})
+    _save_json(db_dir(lib_root) / UNDO_FILE, {"ops": ops})
     _apply_to_catalog(catalog, ops)
     try:
         plan_path.unlink()
@@ -254,9 +254,9 @@ def apply_plan(lib_root, catalog, rebuild):
 def undo_sort(lib_root, catalog, rebuild):
     """Reverse the last apply, using the sort_undo.json journal."""
     lib_root = Path(lib_root)
-    journal = _load_json(lib_root / UNDO_FILE, None)
+    journal = _load_json(Path(lib_root) / DB_DIR / UNDO_FILE, None)
     if not journal or not journal.get("ops"):
-        print("\n  No sort to undo (no %s at the library root)." % UNDO_FILE)
+        print("\n  No sort to undo (no %s at the library root)." % os.path.join(DB_DIR, UNDO_FILE))
         return
     undone, problems = [], 0
     for op in reversed(journal["ops"]):
@@ -270,7 +270,7 @@ def undo_sort(lib_root, catalog, rebuild):
     _apply_to_catalog(catalog, undone)
     if not problems:
         try:
-            (lib_root / UNDO_FILE).unlink()
+            (lib_root / DB_DIR / UNDO_FILE).unlink()
         except OSError:
             pass
     rebuild(catalog)
@@ -287,8 +287,8 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
     """Menu option 5: artist index -> plan -> confirm -> apply."""
     lib_root, scan_root = Path(lib_root), Path(scan_root)
 
-    if (lib_root / PLAN_FILE).exists():
-        print("\n  A plan from a previous run exists: %s" % PLAN_FILE)
+    if (lib_root / DB_DIR / PLAN_FILE).exists():
+        print("\n  A plan from a previous run exists: %s" % os.path.join(DB_DIR, PLAN_FILE))
         print("    [Enter] Rebuild it fresh")
         print("    a)      Apply it as it stands (honours your edits)")
         if _ask("  > ").strip().lower() == "a":
@@ -326,7 +326,7 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
 
     write_plan(lib_root, rows)
     print("\n" + "=" * 56)
-    print("  Plan written to %s - nothing has moved yet." % PLAN_FILE)
+    print("  Plan written to %s - nothing has moved yet." % os.path.join(DB_DIR, PLAN_FILE))
     print("    Files to move            : %d (into %d new folder(s))" % (stats["moves"], stats["new_folders"]))
     print("    Folders to add years to  : %d" % stats["renames"])
     print("    Already sorted           : %d" % stats["already"])
@@ -342,13 +342,13 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
     pick = _ask("  > ").strip().lower()
     if pick == "q":
         try:
-            (lib_root / PLAN_FILE).unlink()
+            (lib_root / DB_DIR / PLAN_FILE).unlink()
         except OSError:
             pass
         print("  Plan discarded; nothing moved.")
         return
     if pick == "e":
-        print("  Kept. Open %s, delete any rows you disagree with," % PLAN_FILE)
+        print("  Kept. Open %s, delete any rows you disagree with," % os.path.join(DB_DIR, PLAN_FILE))
         print("  then run option 5 again and choose 'a' to apply.")
         return
     apply_plan(lib_root, catalog, rebuild)

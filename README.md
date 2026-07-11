@@ -10,15 +10,19 @@ you first, and every sort can be undone in one step.
 
 ## What it produces
 
-All four files are written into the library root, next to your images:
+Only `wiki.html` sits at the library root, next to your images — it has to,
+because it references them by relative path. Every other working file lives
+in a `_database` folder at the root, keeping the library itself tidy.
+Libraries created before this layout are tidied automatically on the next
+run.
 
-| File | What it is |
-| --- | --- |
-| `catalog.json` | The master file. Everything else is generated from it. |
-| `catalog.csv` | The same data as a spreadsheet, for Excel or Sheets. |
-| `review_queue.csv` | Only the items where the artist attribution is an uncertain guess. |
-| `artists.json` | The artist index: one entry per painter. Hand-editable. |
-| `wiki.html` | A self-contained viewer. Double-click it, no internet needed. |
+| File | Where | What it is |
+| --- | --- | --- |
+| `wiki.html` | library root | A self-contained viewer. Double-click it, no internet needed. |
+| `catalog.json` | `_database` | The master file. Everything else is generated from it. |
+| `catalog.csv` | `_database` | The same data as a spreadsheet, for Excel or Sheets. |
+| `review_queue.csv` | `_database` | Only the items where the artist attribution is an uncertain guess. |
+| `artists.json` | `_database` | The artist index: one entry per painter. Hand-editable. |
 
 `catalog.json` is the single source of truth. The CSVs and `wiki.html` are
 derived from it and can be rebuilt at any time for free (menu option 4).
@@ -80,7 +84,7 @@ when they were last checked.
 
 ## The artist index
 
-`artists.json` at the library root holds one entry per painter: canonical
+`_database/artists.json` holds one entry per painter: canonical
 name, birth/death years, nationality, primary school, a single 60-word bio,
 and a Wikipedia title, plus an alias map that folds spelling variants
 ("Theodoros Ralli" / "Theodoros Rallis") onto one painter. It exists so
@@ -112,7 +116,7 @@ operation on top of it. Point the tool at a messy folder, catalogue it (option
 1. **Roster.** Painter identities come from the artist index above; any
    names it does not know yet are looked up first. If a year is wrong, edit
    `artists.json` and it stays fixed.
-2. **Plan.** Every proposed move is written to `sort_plan.csv` and summarised.
+2. **Plan.** Every proposed move is written to `_database/sort_plan.csv` and summarised.
    Nothing has moved yet. Open the CSV and delete any rows you disagree with,
    then re-run option 5 and choose `a` to apply the edited plan.
 3. **Apply.** Files move, every operation is journaled to `sort_undo.json`,
@@ -168,8 +172,11 @@ identically to running from the repo.
 
 These are deliberate. Changes should not break them.
 
-- Cataloguing never moves, renames, or overwrites an image. Outputs go into
-  the library root only. The sorter (`sorter.py`) is the single, explicit
+- Cataloguing never moves, renames, or overwrites an image. All working
+  files go into `_database` at the library root; `wiki.html` alone sits at
+  the root itself, because its image links are relative and break anywhere
+  else. Legacy root-level layouts are migrated automatically
+  (`migrate_layout`). The sorter (`sorter.py`) is the single, explicit
   exception: it moves files only from a plan the user has seen, journals
   every operation to `sort_undo.json`, keeps the catalogue's paths in sync,
   and can undo the whole sort in one step. Nothing else may move a file.

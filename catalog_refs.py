@@ -9,11 +9,13 @@ Just run it. It will ask you a couple of plain questions:
 Option 1 estimates the cost for free (no API key, no charge). Options 2 and 3
 do the real cataloguing and need an Anthropic API key set on your machine.
 
-Results are written next to your library as catalog.json (the master file),
-catalog.csv (browsable), and review_queue.csv (only the items worth a human
-double-check). Cataloguing never moves or renames an image; only the sorter
-(option 5) moves files, and only after showing you its full plan first. Every
-sort is journaled and one option (6) undoes it.
+Results are written into a _database folder at the library root: catalog.json
+(the master file), catalog.csv (browsable), review_queue.csv (items worth a
+human double-check), and artists.json (the painter index). Only wiki.html sits
+at the root itself, because its image links are relative. Cataloguing never
+moves or renames an image; only the sorter (option 5) moves files, and only
+after showing you its full plan first. Every sort is journaled and one option
+(6) undoes it.
 """
 
 import base64
@@ -68,9 +70,9 @@ CSV_COLUMNS = [
 # module's source in at its import line, keeping the config at the top.
 from record_schema import SYSTEM, RECORD_TOOL
 from cleaning import clean_record
-from artists import ensure_artists, folder_hints
+from artists import ARTISTS_FILE, DB_DIR, db_dir, ensure_artists, folder_hints
 from viewer import write_wiki
-from sorter import run_sort, undo_sort
+from sorter import run_sort, undo_sort, PLAN_FILE, UNDO_FILE
 
 # --------------------------------------------------------------------------- helpers
 
@@ -97,7 +99,7 @@ def discover_images(root, recurse=True):
     for p in sorted(walker):
         if not p.is_file() or p.suffix.lower() not in IMAGE_EXTS:
             continue
-        if any(part.startswith(".") for part in p.relative_to(root).parts):
+        if any(part.startswith(".") or part == DB_DIR for part in p.relative_to(root).parts):
             continue
         out.append(p)
     return out
@@ -239,7 +241,8 @@ def merge_batch(client, batch_id, id_to_path, catalog):
 
 def write_csvs(out_dir, catalog):
     rows = list(catalog.values())
-    with open(Path(out_dir) / CATALOG_CSV, "w", encoding="utf-8-sig", newline="") as f:
+    db = db_dir(out_dir)
+    with open(db / CATALOG_CSV, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore")
         w.writeheader()
         for r in rows:
@@ -251,7 +254,7 @@ def write_csvs(out_dir, catalog):
     flagged = [r for r in rows if r.get("needs_review")
                or r.get("artist_confidence") in {"low", "medium", "unknown"}
                or r.get("attribution_source") == "unknown"]
-    with open(Path(out_dir) / REVIEW_CSV, "w", encoding="utf-8-sig", newline="") as f:
+    with open(db / REVIEW_CSV, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=review_cols, extrasaction="ignore")
         w.writeheader()
         for r in flagged:
@@ -279,7 +282,7 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
         return
     client = anthropic.Anthropic()
 
-    state = load_json(Path(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
+    state = load_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
     if state.get("pending_batch_id"):
         bid = state["pending_batch_id"]
         print(f"Resuming an unfinished batch ({bid})...")
@@ -287,10 +290,10 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
             wait_for_batch(client, bid)
             ok, failed = merge_batch(client, bid, state["id_to_path"], catalog)
             print(f"  recovered {ok} ({failed} to retry)")
-            save_json(Path(out_dir) / CATALOG_FILE, catalog)
+            save_json(db_dir(out_dir) / CATALOG_FILE, catalog)
         except Exception as e:
             print(f"  could not recover it ({e}); those items will be redone.")
-        save_json(Path(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
+        save_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
 
     todo = [p for p in images if str(p.relative_to(root)) not in catalog]
     if limit:
@@ -325,21 +328,21 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
         id_to_path = {k: v for k, v in id_to_path_all.items() if k in cids}
         print(f"\nBatch {i}: sending {len(batch_reqs):,} image(s)...")
         batch = client.messages.batches.create(requests=batch_reqs)
-        save_json(Path(out_dir) / STATE_FILE, {"pending_batch_id": batch.id, "id_to_path": id_to_path})
+        save_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": batch.id, "id_to_path": id_to_path})
         wait_for_batch(client, batch.id)
         ok, failed = merge_batch(client, batch.id, id_to_path, catalog)
         total_ok += ok
         total_failed += failed
         print(f"  {ok} done, {failed} failed/skipped")
-        save_json(Path(out_dir) / CATALOG_FILE, catalog)
-        save_json(Path(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
+        save_json(db_dir(out_dir) / CATALOG_FILE, catalog)
+        save_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
 
     refresh_artist_db(root, catalog)
     n_total, n_flagged = write_csvs(out_dir, catalog)
     wiki = write_wiki(out_dir, catalog)
     print(f"\nDone. {total_ok} new this run, {total_failed} to retry.")
     print(f"Catalogue holds {n_total} records; {n_flagged} flagged for review.")
-    print(f"Files written to: {out_dir}")
+    print(f"Data files in {Path(out_dir) / DB_DIR}; wiki.html at the library root.")
     print(f"Open {wiki.name} in your browser to look through them.")
     if total_failed:
         print("Re-run and choose the same option to retry the failures.")
@@ -355,7 +358,7 @@ def ask(prompt):
 
 
 def load_catalog(root):
-    catalog = load_json(Path(root) / CATALOG_FILE, {})
+    catalog = load_json(Path(root) / DB_DIR / CATALOG_FILE, {})
     for rec in catalog.values():
         clean_record(rec)
     return catalog
@@ -369,9 +372,30 @@ def find_library_root(start):
     """
     start = Path(start).resolve()
     for d in (start, *start.parents):
-        if (d / CATALOG_FILE).exists():
+        if (d / DB_DIR / CATALOG_FILE).exists() or (d / CATALOG_FILE).exists():
             return d
     return None
+
+
+def migrate_layout(root):
+    """One-time tidy-up for libraries created before the _database layout:
+    move every working file (and its .bak variants) from the library root
+    into _database. wiki.html alone stays at the root."""
+    root = Path(root)
+    names = (CATALOG_FILE, CATALOG_CSV, REVIEW_CSV, STATE_FILE, ARTISTS_FILE, PLAN_FILE, UNDO_FILE)
+    legacy = [p for p in root.glob("*") if p.is_file()
+              and any(p.name == n or p.name.startswith(n + ".") for n in names)]
+    if not legacy:
+        return
+    db = db_dir(root)
+    moved = 0
+    for p in legacy:
+        if (db / p.name).exists():
+            continue
+        p.replace(db / p.name)
+        moved += 1
+    if moved:
+        print(f"  Tidied {moved} data file(s) into {DB_DIR}\\ (wiki.html stays at the root).")
 
 
 def reposition_library(old_root, new_root):
@@ -401,11 +425,18 @@ def reposition_library(old_root, new_root):
             return None
     new_root.mkdir(parents=True, exist_ok=True)
     if old_root != new_root:
-        for name in (CATALOG_FILE, CATALOG_CSV, REVIEW_CSV, WIKI_FILE, STATE_FILE):
-            src = old_root / name
+        old_db, new_db = db_dir(old_root), db_dir(new_root)
+        art = old_db / ARTISTS_FILE
+        if art.exists() and not (new_db / ARTISTS_FILE).exists():
+            art.replace(new_db / ARTISTS_FILE)  # keyed by name, not path: still valid
+        for name in (CATALOG_FILE, CATALOG_CSV, REVIEW_CSV, STATE_FILE, PLAN_FILE, UNDO_FILE):
+            src = old_db / name
             if src.exists():
                 src.replace(src.with_name(src.name + ".bak"))
-    save_json(new_root / CATALOG_FILE, remapped)
+        wiki = old_root / WIKI_FILE
+        if wiki.exists():
+            wiki.replace(wiki.with_name(wiki.name + ".bak"))
+    save_json(db_dir(new_root) / CATALOG_FILE, remapped)
     write_csvs(new_root, remapped)
     write_wiki(new_root, remapped)
     return remapped
@@ -420,6 +451,7 @@ def resolve_library(scan_root):
     detected = find_library_root(scan_root)
     if detected:
         print(f"\n  Existing library found at:\n    {detected}")
+        migrate_layout(detected)
         print("  What would you like to do?")
         print("    [Enter] Add these results to it  (recommended)")
         print("    r)      Move this library to another folder (fixes image links)")
@@ -484,7 +516,7 @@ def main():
     choice = ask("  > ").strip()
 
     def rebuild(cat):
-        save_json(out_dir / CATALOG_FILE, cat)
+        save_json(db_dir(out_dir) / CATALOG_FILE, cat)
         write_csvs(out_dir, cat)
         write_wiki(out_dir, cat)
 
@@ -496,7 +528,7 @@ def main():
         if not catalog:
             print("\n  No results yet. Do a run first (option 2 or 3), then come back.")
             return
-        save_json(out_dir / CATALOG_FILE, catalog)
+        save_json(db_dir(out_dir) / CATALOG_FILE, catalog)
         write_csvs(out_dir, catalog)
         wiki = write_wiki(out_dir, catalog)
         print(f"\n  Built {wiki.name} with {len(catalog):,} record(s).")

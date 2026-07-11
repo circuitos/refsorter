@@ -23,6 +23,7 @@ import unicodedata
 from pathlib import Path
 
 ARTISTS_FILE = "artists.json"
+DB_DIR = "_database"  # every working file except wiki.html lives in here
 ARTIST_MODEL = "claude-sonnet-5"  # facts must be right; a whole library's index costs ~a cent
 ARTIST_CHUNK = 25
 
@@ -80,6 +81,16 @@ def _save_json(path, obj):
     os.replace(tmp, path)
 
 
+def db_dir(lib_root):
+    """The library's data folder, created on demand. Everything except
+    wiki.html lives here; the wiki alone must sit at the library root so its
+    relative image paths resolve. Use this for writes; plain paths for reads
+    so probing never litters folders with empty _database dirs."""
+    d = Path(lib_root) / DB_DIR
+    d.mkdir(exist_ok=True)
+    return d
+
+
 def norm(name):
     """Matching key for a painter name: accents, case, punctuation ignored."""
     s = unicodedata.normalize("NFKD", str(name or ""))
@@ -113,11 +124,12 @@ def roster_years(entry):
 
 def folder_hints(root):
     """Year-stripped names of existing folders, as spelling hints for lookups."""
-    return sorted({split_folder_years(d.name)[0] for d in Path(root).rglob("*") if d.is_dir()})[:300]
+    return sorted({split_folder_years(d.name)[0] for d in Path(root).rglob("*")
+                   if d.is_dir() and not d.name.startswith(".") and d.name != DB_DIR})[:300]
 
 
 def load_artists(lib_root):
-    db = _load_json(Path(lib_root) / ARTISTS_FILE, {"artists": {}, "aliases": {}})
+    db = _load_json(Path(lib_root) / DB_DIR / ARTISTS_FILE, {"artists": {}, "aliases": {}})
     for canon in db["artists"]:
         db["aliases"].setdefault(norm(canon), canon)
     return db
@@ -183,6 +195,6 @@ def ensure_artists(lib_root, raw_names, hints):
             cur.setdefault("bio", new["bio"])  # mark old entries as enriched
         db["aliases"][norm(raw)] = canonical
         db["aliases"].setdefault(norm(canonical), canonical)
-    _save_json(Path(lib_root) / ARTISTS_FILE, db)
-    print("  Artist index saved to %s (hand-editable; your edits are kept)." % ARTISTS_FILE)
+    _save_json(db_dir(lib_root) / ARTISTS_FILE, db)
+    print("  Artist index saved to %s (hand-editable; your edits are kept)." % os.path.join(DB_DIR, ARTISTS_FILE))
     return db
