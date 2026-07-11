@@ -66,9 +66,14 @@ start a fresh one. The menu options:
 
 1. **Estimate the cost.** Free, no API key used, nothing sent anywhere.
 2. **Test run on 25 images.** A small charge, to check the quality first.
-3. **Full run.** The real thing. Progress is saved as it goes; if it is
-   interrupted, run it again and it picks up where it left off. Anything
-   that failed is simply retried on the next run.
+3. **Full run.** The real thing. Before it starts you choose the order —
+   library order, or highest-resolution images first — and can give it a
+   spend cap in dollars: it measures every image locally (free), sends only
+   as much as the cap covers, and leaves the rest for a later run. Progress
+   is saved batch by batch; if the run is interrupted — or your API credit
+   runs out mid-way — run it again whenever, even next month, and it
+   continues exactly where it stopped. Anything that failed is simply
+   retried on the next run.
 4. **Rebuild the viewer** from existing results. Free.
 5. **Sort catalogued images into painter folders.** Shows its full plan
    first; nothing moves until you say so. See below.

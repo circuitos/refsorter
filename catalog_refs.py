@@ -122,6 +122,37 @@ def probe_downscaled_size(path):
         return None
 
 
+def plan_run(todo, model, largest_first, budget):
+    """Order the work and trim it to a spend cap. Returns (paths, est_cost).
+
+    Reads image headers only - local and free. Cost per image is the same
+    over-estimate option 1 uses, so a capped run tends to come in under
+    budget rather than over. largest_first sorts by original pixel count,
+    a proxy for reference quality."""
+    measured = []
+    for p in todo:
+        try:
+            with Image.open(p) as im:
+                w, h = im.size
+        except Exception:
+            continue
+        scale = min(1.0, MAX_DIM / max(w, h)) if max(w, h) else 1.0
+        dims = (max(1, int(w * scale)), max(1, int(h * scale)))
+        cost = (image_tokens(*dims) + OVERHEAD_IN) / 1e6 * model["in"] + EST_OUT / 1e6 * model["out"]
+        measured.append((p, w * h, cost))
+    if largest_first:
+        measured.sort(key=lambda t: t[1], reverse=True)
+    if budget is None:
+        return [p for p, _, _ in measured], sum(c for _, _, c in measured)
+    picked, spend = [], 0.0
+    for p, _, cost in measured:
+        if spend + cost > budget:
+            break
+        spend += cost
+        picked.append(p)
+    return picked, spend
+
+
 def encode_image(path):
     try:
         with Image.open(path) as im:
@@ -278,8 +309,9 @@ def refresh_artist_db(root, catalog):
         print(f"  Artist index update failed ({e}); it will be retried next run.")
 
 
-def do_run(root, out_dir, images, catalog, model_id, limit=None):
+def do_run(root, out_dir, images, catalog, model, limit=None, largest_first=False, budget=None):
     import anthropic
+    model_id = model["id"]
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("\nNo API key found. Set ANTHROPIC_API_KEY first (I can walk you through it).")
         return
@@ -301,6 +333,16 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
     todo = [p for p in images if str(p.relative_to(root)) not in catalog]
     if limit:
         todo = todo[:limit]
+    if largest_first or budget is not None:
+        print(f"\nPlanning the run: measuring {len(todo):,} image(s) locally (free)...")
+        todo, est = plan_run(todo, model, largest_first, budget)
+        if budget is not None:
+            print(f"  The ${budget:,.2f} cap covers {len(todo):,} image(s), estimated ${est:,.2f}")
+            print("  (the estimate runs high, so the real bill is usually lower).")
+            print("  Everything beyond the cap simply waits for a later run.")
+            if not todo:
+                print("  That cap is too small for even one image; nothing was sent.")
+                return
     print(f"\nPreparing {len(todo):,} image(s)... (this reads and shrinks each one)")
 
     prepared, id_to_path_all, skipped = [], {}, 0
@@ -330,10 +372,22 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
         cids = {r["custom_id"] for r in batch_reqs}
         id_to_path = {k: v for k, v in id_to_path_all.items() if k in cids}
         print(f"\nBatch {i}: sending {len(batch_reqs):,} image(s)...")
-        batch = client.messages.batches.create(requests=batch_reqs)
+        try:
+            batch = client.messages.batches.create(requests=batch_reqs)
+        except Exception as e:
+            print(f"\n  Could not start the next batch ({e}).")
+            print("  If that is exhausted API credit: everything processed so far is")
+            print("  saved. Run this again after topping up - next month is fine -")
+            print("  and it continues exactly where it stopped.")
+            break
         save_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": batch.id, "id_to_path": id_to_path})
-        wait_for_batch(client, batch.id)
-        ok, failed = merge_batch(client, batch.id, id_to_path, catalog)
+        try:
+            wait_for_batch(client, batch.id)
+            ok, failed = merge_batch(client, batch.id, id_to_path, catalog)
+        except Exception as e:
+            print(f"\n  Lost contact with the running batch ({e}).")
+            print("  Its id is saved; the next run recovers its results automatically.")
+            break
         total_ok += ok
         total_failed += failed
         print(f"  {ok} done, {failed} failed/skipped")
@@ -548,7 +602,21 @@ def main():
             print("  Not a valid choice. Run it again.")
             return
         limit = 25 if choice == "2" else None
-        do_run(root, out_dir, images, catalog, model["id"], limit=limit)
+        largest_first, budget = False, None
+        if choice == "3":
+            print("\n  Process in which order?")
+            print("    [Enter] Library order, folder by folder")
+            print("    r)      Highest-resolution images first (best reference quality first)")
+            largest_first = ask("  > ").strip().lower() == "r"
+            cap = ask("  Optional spend cap for this run, in dollars (the run stops there\n"
+                      "  and the rest waits for next time)\n    [Enter = no cap]\n  > ").strip().lstrip("$")
+            if cap:
+                try:
+                    budget = float(cap)
+                except ValueError:
+                    print("  Didn't understand that number; running without a cap.")
+        do_run(root, out_dir, images, catalog, model, limit=limit,
+               largest_first=largest_first, budget=budget)
         return
 
     if choice == "5":
