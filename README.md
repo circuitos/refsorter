@@ -17,13 +17,16 @@ All four files are written into the library root, next to your images:
 | `catalog.json` | The master file. Everything else is generated from it. |
 | `catalog.csv` | The same data as a spreadsheet, for Excel or Sheets. |
 | `review_queue.csv` | Only the items where the artist attribution is an uncertain guess. |
+| `artists.json` | The artist index: one entry per painter. Hand-editable. |
 | `wiki.html` | A self-contained viewer. Double-click it, no internet needed. |
 
 `catalog.json` is the single source of truth. The CSVs and `wiki.html` are
 derived from it and can be rebuilt at any time for free (menu option 4).
 
 Each record holds: artist, confidence, title, date, movement, medium, subject,
-palette, composition notes, art-historical context, and search tags. Artist
+palette, composition notes, work-specific context, and search tags. Facts
+about the *painter* (years, nationality, school, one bio) live once per
+artist in `artists.json`, not repeated per image — see "The artist index". Artist
 names found in your folder and file names are taken as ground truth; the model
 only guesses when the path tells it nothing, and it reports honest confidence
 when it does. Uncertain guesses are flagged for review.
@@ -75,17 +78,40 @@ your folder before you spend anything. Model IDs and prices drift; both live
 at the top of `catalog_refs.py` as plain editable settings, with a note of
 when they were last checked.
 
+## The artist index
+
+`artists.json` at the library root holds one entry per painter: canonical
+name, birth/death years, nationality, primary school, a single 60-word bio,
+and a Wikipedia title, plus an alias map that folds spelling variants
+("Theodoros Ralli" / "Theodoros Rallis") onto one painter. It exists so
+artist-level facts are generated **once**, not re-told slightly differently
+on every card by that painter.
+
+- It fills itself in automatically after each catalogue run: any painters new
+  to the catalogue get looked up in one small text-only API call (no images,
+  well under a cent for a whole library).
+- The wiki shows the entry as an "About the painter" panel on every work by
+  that painter, and search reaches it too — searching "Swedish" finds all
+  works by Swedish painters even when no record mentions it.
+- It is plain JSON and hand-editable. Your edits win: lookups only fill
+  fields that are still empty, never overwrite a value.
+- To backfill bios for works catalogued before the index existed, run
+  option 3 on an already-done folder: nothing is re-sent, but the index is
+  topped up and the wiki rebuilt.
+
+Because the biography lives here, the per-image `context` field is
+work-specific by instruction — which also trims the output tokens each
+image pays for.
+
 ## Sorting into painter folders
 
 Cataloguing does the expensive looking; sorting is a cheap, deterministic file
 operation on top of it. Point the tool at a messy folder, catalogue it (option
 2 or 3), then choose option 5. It works in three stages:
 
-1. **Roster.** The unique artist names in scope are canonicalised (spelling
-   variants of one painter merge onto one name) and given birth/death years by
-   a single text-only API call — no images, well under a cent — cached forever
-   in `artists.json` at the library root. It is plain JSON: if a year is
-   wrong, edit it there and it stays fixed.
+1. **Roster.** Painter identities come from the artist index above; any
+   names it does not know yet are looked up first. If a year is wrong, edit
+   `artists.json` and it stays fixed.
 2. **Plan.** Every proposed move is written to `sort_plan.csv` and summarised.
    Nothing has moved yet. Open the CSV and delete any rows you disagree with,
    then re-run option 5 and choose `a` to apply the edited plan.
@@ -133,7 +159,8 @@ identically to running from the repo.
 | `catalog_refs.py` | Entry point: settings, interactive menu, batch logic. |
 | `record_schema.py` | The system prompt, the tool schema, and the movement canon. |
 | `cleaning.py` | The repair pipeline every record passes through. |
-| `sorter.py` | The painter-folder sorter: roster, plan, apply, undo. |
+| `artists.py` | The artist index: canonical names, years, bios, aliases. |
+| `sorter.py` | The painter-folder sorter: plan, apply, undo. |
 | `viewer.py` + `templates/wiki.html` | The offline wiki builder and its page template. |
 | `make_standalone.py` | Inlines everything into `dist/catalog_refs.py`. |
 
@@ -159,6 +186,10 @@ These are deliberate. Changes should not break them.
   the movement onto the canonical list, recompute the review flag.
 - `needs_review` flags artist uncertainty only. A securely named artist with
   an unknown title or date is not review-worthy.
+- Artist-level facts live once in `artists.json`, keyed by canonical name
+  with an alias map for variants. Lookups only fill empty fields — a value
+  the user edited by hand is never overwritten. Per-image `context` stays
+  about the work, never the painter's biography.
 - `MOVEMENT_CANON` and `MOVEMENT_INFO` stay in sync: every canon value has an
   info entry with years, blurb, and wiki slug ("Other" has null years/wiki).
 - Batches are chunked at 1,000 requests / 200 MB, the in-flight batch id is

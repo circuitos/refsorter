@@ -68,6 +68,7 @@ CSV_COLUMNS = [
 # module's source in at its import line, keeping the config at the top.
 from record_schema import SYSTEM, RECORD_TOOL
 from cleaning import clean_record
+from artists import ensure_artists, folder_hints
 from viewer import write_wiki
 from sorter import run_sort, undo_sort
 
@@ -258,6 +259,19 @@ def write_csvs(out_dir, catalog):
     return len(rows), len(flagged)
 
 
+def refresh_artist_db(root, catalog):
+    """Fill in artist-index entries for any painters new to the catalogue.
+    Best-effort: a failure here must never cost the run's results."""
+    try:
+        names = sorted({(r.get("artist") or "").strip() for r in catalog.values()
+                        if (r.get("artist") or "").strip()
+                        and r.get("artist_confidence") in ("given", "high")})
+        if names:
+            ensure_artists(root, names, folder_hints(root))
+    except Exception as e:
+        print(f"  Artist index update failed ({e}); it will be retried next run.")
+
+
 def do_run(root, out_dir, images, catalog, model_id, limit=None):
     import anthropic
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -298,7 +312,8 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
     if skipped:
         print(f"  {skipped} unreadable image(s) skipped.")
     if not prepared:
-        print("Everything here is already catalogued; refreshing the viewer.")
+        print("Everything here is already catalogued; refreshing the artist index and viewer.")
+        refresh_artist_db(root, catalog)
         write_csvs(out_dir, catalog)
         wiki = write_wiki(out_dir, catalog)
         print(f"Open {wiki.name} in your browser.")
@@ -319,6 +334,7 @@ def do_run(root, out_dir, images, catalog, model_id, limit=None):
         save_json(Path(out_dir) / CATALOG_FILE, catalog)
         save_json(Path(out_dir) / STATE_FILE, {"pending_batch_id": None, "id_to_path": {}})
 
+    refresh_artist_db(root, catalog)
     n_total, n_flagged = write_csvs(out_dir, catalog)
     wiki = write_wiki(out_dir, catalog)
     print(f"\nDone. {total_ok} new this run, {total_failed} to retry.")

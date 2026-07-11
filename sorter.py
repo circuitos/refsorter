@@ -3,11 +3,10 @@
 Cataloguing (menu options 2/3) does the expensive vision work; sorting is a
 deterministic file operation on top of the catalogue, in three stages:
 
-  roster  ->  plan (sort_plan.csv, nothing moves)  ->  apply (journaled)
+  artist index  ->  plan (sort_plan.csv, nothing moves)  ->  apply (journaled)
 
-- The roster canonicalises artist-name variants ("Theodoros Ralli" /
-  "Theodoros Rallis") and fetches birth/death years with one small text-only
-  API call, cached in artists.json at the library root (hand-editable).
+- Painter identities come from the artist database (artists.py / artists.json):
+  name variants merge onto one canonical painter with birth/death years.
 - New folders follow the library's existing convention "Name 1856-1925"
   ("Name 1957-present" for living painters) and are created inside the folder
   being sorted, so grouping folders like "! RUSSIANS" keep their meaning.
@@ -20,50 +19,15 @@ never moved: only here, only after showing the plan, always undoable.
 """
 
 import csv
-import json
 import os
-import re
-import unicodedata
 from pathlib import Path
 
-ARTISTS_FILE = "artists.json"
+from artists import ARTISTS_FILE, _load_json, _save_json, ensure_artists, folder_hints, norm, roster_years, split_folder_years  # noqa: E501 - one line so the standalone build can strip it
+
 PLAN_FILE = "sort_plan.csv"
 UNDO_FILE = "sort_undo.json"
-ROSTER_MODEL = "claude-sonnet-5"  # dates must be right; a whole roster costs ~a cent
-ROSTER_CHUNK = 50
 SORTABLE_CONFIDENCE = {"given", "high"}
 PLAN_COLUMNS = ["action", "src", "dest", "artist", "confidence", "note"]
-
-ROSTER_SYSTEM = """You are given painter names collected from one reference library: `names` are raw artist strings from its catalogue and `library_folders` are painter folders that already exist there. Return one entry per raw name via the identify_painters tool.
-
-CANONICAL FORM. Merge spelling variants of the same painter onto one canonical name: two raw names for the same painter must return the identical canonical string. When an entry in library_folders clearly refers to the same painter, adopt the folder's spelling; otherwise use the spelling standard references (English Wikipedia) use. A bare surname whose painter is obvious from the other names or folders (e.g. "Krachkovsky" beside "Iosif Krachkovsky") gets the full canonical name.
-
-YEARS. Give birth and death years only when you securely know this specific painter. For living painters set living true and died null. When you cannot securely identify the painter or their dates, return null years and confident false. Never guess years to look complete."""
-
-ROSTER_TOOL = {
-    "name": "identify_painters",
-    "description": "Return one entry per raw painter name.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "painters": {"type": "array", "items": {
-                "type": "object",
-                "properties": {
-                    "raw": {"type": "string", "description": "The input name, echoed exactly."},
-                    "canonical": {"type": "string", "description": "Canonical name; identical for variants of one painter."},
-                    "born": {"type": ["integer", "null"]},
-                    "died": {"type": ["integer", "null"], "description": "null when living or unknown."},
-                    "living": {"type": "boolean"},
-                    "confident": {"type": "boolean", "description": "false when identity or years are a guess."},
-                },
-                "required": ["raw", "canonical", "born", "died", "living", "confident"],
-            }},
-        },
-        "required": ["painters"],
-    },
-}
-
-# ------------------------------------------------------------------ helpers
 
 
 def _ask(prompt):
@@ -73,114 +37,9 @@ def _ask(prompt):
         return ""
 
 
-def _load_json(path, default):
-    p = Path(path)
-    if p.exists():
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return default
-
-
-def _save_json(path, obj):
-    tmp = Path(str(path) + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-
-def _norm(name):
-    """Matching key for a painter name: accents, case, punctuation ignored."""
-    s = unicodedata.normalize("NFKD", str(name or ""))
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    s = s.casefold().replace("-", " ")
-    s = re.sub(r"[^\w\s]", "", s, flags=re.U)
-    return re.sub(r"\s+", " ", s).strip()
-
-
-_YEARS_RE = re.compile(r"^(.*\S)\s+(\d{4})\s*[-–—]\s*(\d{4}|present)$", re.I)
-
-
-def split_folder_years(name):
-    """'Edgar Payne 1878-1947' -> ('Edgar Payne', '1878-1947'); no years -> (name, None)."""
-    m = _YEARS_RE.match(str(name).strip())
-    if not m:
-        return str(name).strip(), None
-    return m.group(1), "%s-%s" % (m.group(2), m.group(3).lower())
-
-
-def roster_years(entry):
-    """The 'YYYY-YYYY' / 'YYYY-present' span for a roster entry, or None."""
-    if not entry.get("confident") or not entry.get("born"):
-        return None
-    if entry.get("died"):
-        return "%s-%s" % (entry["born"], entry["died"])
-    if entry.get("living"):
-        return "%s-present" % entry["born"]
-    return None
-
-
 def folder_name_for(canonical, entry):
     years = roster_years(entry)
     return "%s %s" % (canonical, years) if years else canonical
-
-
-# ------------------------------------------------------------------ roster
-
-
-def load_roster(lib_root):
-    roster = _load_json(Path(lib_root) / ARTISTS_FILE, {"artists": {}, "aliases": {}})
-    for canon in roster["artists"]:
-        roster["aliases"].setdefault(_norm(canon), canon)
-    return roster
-
-
-def _roster_call(names, folder_hints):
-    import anthropic
-    client = anthropic.Anthropic()
-    out = []
-    for i in range(0, len(names), ROSTER_CHUNK):
-        chunk = names[i:i + ROSTER_CHUNK]
-        payload = json.dumps({"names": chunk, "library_folders": folder_hints}, ensure_ascii=False)
-        msg = client.messages.create(
-            model=ROSTER_MODEL, max_tokens=4096, system=ROSTER_SYSTEM,
-            tools=[ROSTER_TOOL], tool_choice={"type": "tool", "name": "identify_painters"},
-            messages=[{"role": "user", "content": payload}],
-        )
-        for block in msg.content:
-            if getattr(block, "type", None) == "tool_use":
-                out.extend(block.input.get("painters", []))
-    return out
-
-
-def ensure_roster(lib_root, raw_names, folder_hints):
-    """Return the roster covering every raw name, calling the API only for new
-    ones. Returns None when names are missing and no API key is available."""
-    roster = load_roster(lib_root)
-    unknown = sorted({n for n in raw_names if _norm(n) not in roster["aliases"]})
-    if not unknown:
-        return roster
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("\n  %d painter name(s) need a one-time lookup (canonical spelling +" % len(unknown))
-        print("  birth/death years), which takes one tiny text-only API call.")
-        print("  Set ANTHROPIC_API_KEY first, then run this again.")
-        return None
-    print("  Looking up %d painter name(s) (text-only, costs well under a cent)..." % len(unknown))
-    got = {}
-    for e in _roster_call(unknown, folder_hints):
-        if isinstance(e, dict) and e.get("raw"):
-            got[e["raw"]] = e
-    for raw in unknown:
-        e = got.get(raw, {})
-        canonical = str(e.get("canonical") or raw).strip() or raw
-        roster["artists"].setdefault(canonical, {
-            "born": e.get("born"), "died": e.get("died"),
-            "living": bool(e.get("living")), "confident": bool(e.get("confident")),
-        })
-        roster["aliases"][_norm(raw)] = canonical
-        roster["aliases"].setdefault(_norm(canonical), canonical)
-    _save_json(Path(lib_root) / ARTISTS_FILE, roster)
-    print("  Roster saved to %s (hand-editable; fix any wrong years there)." % ARTISTS_FILE)
-    return roster
 
 
 # ------------------------------------------------------------------ plan
@@ -189,7 +48,7 @@ def ensure_roster(lib_root, raw_names, folder_hints):
 def _folder_artist(folder_name, roster):
     """The canonical artist a folder name refers to, or None."""
     base, _years = split_folder_years(folder_name)
-    return roster["aliases"].get(_norm(base))
+    return roster["aliases"].get(norm(base))
 
 
 def scope_records(lib_root, scan_root, catalog, recurse):
@@ -236,7 +95,7 @@ def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years):
         if not artist_raw or rec.get("artist_confidence") not in SORTABLE_CONFIDENCE:
             stats["left"] += 1
             continue
-        canonical = roster["aliases"].get(_norm(artist_raw))
+        canonical = roster["aliases"].get(norm(artist_raw))
         if not canonical:
             stats["left"] += 1
             continue
@@ -288,7 +147,7 @@ def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years):
                         stats["renames"] += 1
             elif expected and have != expected:
                 rows.append({"action": "flag", "src": rel, "dest": "", "artist": canonical,
-                             "confidence": "", "note": "folder says %s but the roster says %s "
+                             "confidence": "", "note": "folder says %s but the artist index says %s "
                              "(fix whichever is wrong: the folder by hand, or %s)" % (have, expected, ARTISTS_FILE)})
                 stats["flags"] += 1
 
@@ -425,7 +284,7 @@ def undo_sort(lib_root, catalog, rebuild):
 
 
 def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
-    """Menu option 5: roster -> plan -> confirm -> apply."""
+    """Menu option 5: artist index -> plan -> confirm -> apply."""
     lib_root, scan_root = Path(lib_root), Path(scan_root)
 
     if (lib_root / PLAN_FILE).exists():
@@ -449,8 +308,7 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
         print("  (Uncertain attributions are listed in %s.)" % "review_queue.csv")
         return
 
-    hints = sorted({split_folder_years(d.name)[0] for d in scan_root.rglob("*") if d.is_dir()})[:300]
-    roster = ensure_roster(lib_root, raws, hints)
+    roster = ensure_artists(lib_root, raws, folder_hints(scan_root))
     if roster is None:
         return
 

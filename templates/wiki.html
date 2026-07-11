@@ -154,8 +154,13 @@ input[type=text]::placeholder{color:var(--faint);}
 <script>
 const DATA = __DATA__;
 const INFO = __INFO__;
+const ARTISTS = __ARTISTS__;
 const ROOT = __ROOT__;
 const CONF = {given:'#8fb08a',high:'#8fb08a',medium:'#d08a3c',low:'#c56b5c',unknown:'#6f6c64'};
+function normName(s){s=String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ');
+  return s.replace(/[^\p{L}\p{N}_\s]/gu,'').replace(/\s+/g,' ').trim();}
+DATA.forEach(r=>{const c=r.artist&&(ARTISTS.aliases||{})[normName(r.artist)];
+  r._artist=(c&&(ARTISTS.artists||{})[c])?{name:c,info:ARTISTS.artists[c]}:null;});
 function imgsrc(p){return encodeURI(String(p||'').replace(/\\/g,'/'));}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function tagsOf(r){const t=r.tags;if(Array.isArray(t))return t;if(!t)return[];return String(t).split(',').map(s=>s.trim()).filter(Boolean);}
@@ -180,7 +185,8 @@ function matches(r){
   if(curFolder.length){const fp=foldersOf(r);for(let i=0;i<curFolder.length;i++){if(fp[i]!==curFolder[i])return false;}}
   if(mv!=='all'&&r.movement!==mv)return false;
   if(!q)return true;
-  return [r.artist,r.title,r.movement,r.movement_detail,r.subject,r.palette,tagsOf(r).join(' '),r.context].join(' ').toLowerCase().includes(q);
+  const a=r._artist?[r._artist.name,r._artist.info.nationality,r._artist.info.movement,r._artist.info.bio].join(' '):'';
+  return [r.artist,r.title,r.movement,r.movement_detail,r.subject,r.palette,tagsOf(r).join(' '),r.context,a].join(' ').toLowerCase().includes(q);
 }
 function card(r,i){
   const who=esc(r.artist||'Unattributed');
@@ -210,6 +216,16 @@ function renderSide(){
   const rbadge=r.needs_review?' <span class="badge" style="background:rgba(208,138,60,.16);color:var(--amber)">needs review</span>':'';
   const tlist=tagsOf(r);
   const tags=tlist.length?'<div class="pills">'+tlist.map(t=>'<span class="pill">'+esc(t)+'</span>').join('')+'</div>':'';
+  let about='';
+  if(r._artist&&(r._artist.info.bio||r._artist.info.born)){
+    const a=r._artist.info;
+    const yrs=a.born?(a.born+'–'+(a.died||(a.living?'present':'?'))):'';
+    const facts=[yrs,a.nationality,a.movement].filter(Boolean).join(' · ');
+    const wp=a.wiki?'<div style="margin-top:5px"><a href="https://en.wikipedia.org/wiki/'+encodeURI(a.wiki)+'" target="_blank" rel="noopener" style="color:var(--brass);text-decoration:none">Wikipedia ↗</a></div>':'';
+    about=detailRow('About '+esc(r._artist.name),
+      (facts?'<div style="color:var(--muted);font-size:12px;margin-bottom:4px">'+esc(facts)+'</div>':'')
+      +(a.bio?'<div class="ctx">'+esc(a.bio)+'</div>':'')+wp);
+  }
   const mvline=esc(r.movement||'')+(r.movement_detail?' <span style="color:var(--faint)">\u00b7 '+esc(r.movement_detail)+'</span>':'');
   s.innerHTML='<div class="stage"><img src="'+imgsrc(r.path)+'" alt="" onerror="this.replaceWith(document.createTextNode(\'image not found on disk\'))"></div>'
     +'<div class="label">'
@@ -221,6 +237,7 @@ function renderSide(){
     +detailRow('Palette',esc(r.palette))
     +detailRow('Composition',esc(r.composition_notes))
     +detailRow('Context','<div class="ctx">'+esc(r.context)+'</div>')
+    +about
     +(tags?detailRow('Tags',tags):'')
     +(r.notes?detailRow('Notes',esc(r.notes)):'')
     +detailRow('File','<span class="path">'+esc(r.path)+'</span>')

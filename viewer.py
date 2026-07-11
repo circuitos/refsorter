@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from record_schema import MOVEMENT_INFO
+from artists import ARTISTS_FILE
 
 WIKI_TEMPLATE = None  # the standalone build inlines templates/wiki.html here
 
@@ -23,11 +24,18 @@ def _template():
 
 def write_wiki(out_dir, catalog):
     records = list(catalog.values())
+    artists_path = Path(out_dir) / ARTISTS_FILE
+    artists = {"artists": {}, "aliases": {}}
+    if artists_path.exists():
+        with open(artists_path, "r", encoding="utf-8") as f:
+            artists = json.load(f)
     data_json = json.dumps(records, ensure_ascii=False).replace("</", "<\\/")
     info_json = json.dumps(MOVEMENT_INFO, ensure_ascii=False).replace("</", "<\\/")
+    artists_json = json.dumps(artists, ensure_ascii=False).replace("</", "<\\/")
     root_json = json.dumps(Path(out_dir).name or "Library", ensure_ascii=False)
     html = (_template().replace("__DATA__", data_json)
             .replace("__INFO__", info_json)
+            .replace("__ARTISTS__", artists_json)
             .replace("__ROOT__", root_json)
             .replace("__COUNT__", str(len(records))))
     path = Path(out_dir) / "wiki.html"

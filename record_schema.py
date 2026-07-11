@@ -74,7 +74,7 @@ HONESTY OVER CONFIDENCE
 When you must identify the artist yourself from the image, give a real confidence level and never fabricate a specific title or date to look certain. If unsure, say so: set `needs_review` true and put candidate names in `notes`. "Spanish luminist, c. 1900, hand unidentified" beats a confident wrong name. Set `attribution_source` to "unknown" and `artist` to null when you genuinely cannot tell.
 
 DESCRIBE RICHLY BUT BRIEFLY
-This library is searched by feel as much as by name. Always fill movement, palette, composition_notes, subject, context, and tags with real substance, even when the artist is unknown. Hard limits: composition_notes and context each 60 words MAXIMUM; subject and palette one line each. Every word must earn its place: name what the light, staging, and brushwork are doing, and cut all commentary, hedging, and "typical of" padding. Dense and concrete beats complete."""
+This library is searched by feel as much as by name. Always fill movement, palette, composition_notes, subject, context, and tags with real substance, even when the artist is unknown. The library keeps one biography per painter in a separate artist index, so `context` must NOT retell the artist's life, training, or general career: spend its words on THIS work — where it sits in the painter's output, what the subject or setting is, its stylistic or historical placement. Hard limits: composition_notes and context each 60 words MAXIMUM; subject and palette one line each. Every word must earn its place: name what the light, staging, and brushwork are doing, and cut all commentary, hedging, and "typical of" padding. Dense and concrete beats complete."""
 
 RECORD_TOOL = {
     "name": "record_artwork",
@@ -97,7 +97,7 @@ RECORD_TOOL = {
             "subject": {"type": "string", "description": "One line: what is depicted."},
             "palette": {"type": "string", "description": "Dominant colours and tonal character, for searching by mood."},
             "composition_notes": {"type": "string", "description": "60 words max. Lighting, staging, brushwork, what the image is doing compositionally. Dense, no filler."},
-            "context": {"type": "string", "description": "60 words max of art-historical and stylistic context. Facts over commentary."},
+            "context": {"type": "string", "description": "60 words max about this specific work: its place in the painter's output, stylistic and historical placement, notable facts. Never restate the artist's general biography - the library stores that once per painter."},
             "tags": {"type": "array", "items": {"type": "string"}, "description": "MUST be a JSON array of separate strings, never one comma-joined string. Search keywords: movement, subject, technique, palette, era."},
             "needs_review": {"type": "boolean", "description": "True only when the ARTIST attribution is your own uncertain guess. A securely named artist with an unknown title or date is NOT review-worthy."},
             "notes": {"type": "string", "description": "Caveats, alternative attributions, or '' if none."},
