@@ -128,9 +128,12 @@ The rules it sorts by:
 - Folders are named in the library's existing convention:
   `John Singer Sargent 1856-1925`, or `Dean Mitchell 1957-present` for living
   painters, or the bare name when the years are not securely known.
-- New painter folders are created **inside the folder each image already
-  lives in** (its top-level subfolder of the scanned root), so grouping
-  folders like `! RUSSIANS` keep their meaning instead of dissolving.
+- When you sort a subfolder, it asks where the images should end up. The
+  default keeps painter folders **inside the folder each image already lives
+  in** (its top-level subfolder of the scanned root), so grouping folders
+  like `! RUSSIANS` keep their meaning. The alternative (`r`) empties a
+  staging folder **outward**: everything sortable joins the painter folders
+  at the library root — the right choice for an "unsorted" dump folder.
 - Only records whose attribution is secure (`given` or `high` confidence)
   move. Everything uncertain stays exactly where it is — those are the
   `review_queue.csv` items.

@@ -72,8 +72,12 @@ def scope_records(lib_root, scan_root, catalog, recurse):
     return out
 
 
-def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years):
-    """Compute the full plan. Returns (rows, stats); nothing is touched."""
+def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years, to_root=False):
+    """Compute the full plan. Returns (rows, stats); nothing is touched.
+
+    to_root empties a staging folder outward: every sortable file goes to a
+    painter folder at the library root (joining existing ones there), instead
+    of into painter folders inside the scanned folder."""
     lib_root, scan_root = Path(lib_root), Path(scan_root)
     scan_rel = Path(".") if scan_root == lib_root else scan_root.relative_to(lib_root)
     rows = []
@@ -99,17 +103,26 @@ def build_plan(lib_root, scan_root, catalog, recurse, roster, add_years):
         if not canonical:
             stats["left"] += 1
             continue
-        if any(_folder_artist(part, roster) == canonical for part in p.parts[:-1]):
+        if to_root:
+            # Already sorted only if it sits in its painter's ROOT folder;
+            # a painter folder inside the staging area still empties out.
+            already = len(p.parts) > 1 and _folder_artist(p.parts[0], roster) == canonical
+        else:
+            already = any(_folder_artist(part, roster) == canonical for part in p.parts[:-1])
+        if already:
             stats["already"] += 1
             continue
-        # Keep grouping folders: the painter folder goes inside the file's
-        # top-level subfolder of the scanned root, unless that subfolder is
-        # another painter's (a misfile), which sorts to the scanned root.
-        top = rts.parts[0] if len(rts.parts) > 1 else None
-        if top is None or _folder_artist(top, roster):
-            dest_parent = scan_rel
+        if to_root:
+            dest_parent = Path(".")
         else:
-            dest_parent = scan_rel / top
+            # Keep grouping folders: the painter folder goes inside the file's
+            # top-level subfolder of the scanned root, unless that subfolder is
+            # another painter's (a misfile), which sorts to the scanned root.
+            top = rts.parts[0] if len(rts.parts) > 1 else None
+            if top is None or _folder_artist(top, roster):
+                dest_parent = scan_rel
+            else:
+                dest_parent = scan_rel / top
         entry = roster["artists"].get(canonical, {})
         folder = existing_artist_folder(dest_parent, canonical) or folder_name_for(canonical, entry)
         dest = dest_parent / folder / p.name
@@ -308,15 +321,24 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
         print("  (Uncertain attributions are listed in %s.)" % os.path.join(DB_DIR, "review_queue.csv"))
         return
 
-    roster = ensure_artists(lib_root, raws, folder_hints(scan_root))
+    roster = ensure_artists(lib_root, raws, folder_hints(lib_root))
     if roster is None:
         return
+
+    to_root = False
+    if scan_root != lib_root:
+        print("\n  Where should these images end up?")
+        print("    [Enter] In painter folders inside the scanned folder")
+        print("            (keeps groupings like '! RUSSIANS' intact)")
+        print("    r)      In painter folders at the library root, joining the")
+        print("            existing ones there (empties a staging folder outward)")
+        to_root = _ask("  > ").strip().lower() == "r"
 
     ans = _ask("\n  Also add missing birth/death years to existing painter folders\n"
                "  here (e.g. 'Anders Zorn' -> 'Anders Zorn 1860-1920')? [Y/n]\n  > ")
     add_years = not ans.strip().lower().startswith("n")
 
-    rows, stats = build_plan(lib_root, scan_root, catalog, recurse, roster, add_years)
+    rows, stats = build_plan(lib_root, scan_root, catalog, recurse, roster, add_years, to_root)
     flags = [r for r in rows if r["action"] == "flag"]
     if not any(r["action"] in ("move", "rename_folder") for r in rows):
         print("\n  Everything securely attributed is already in its painter's folder.")
