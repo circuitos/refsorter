@@ -9,9 +9,11 @@ Just run it. It will ask you a couple of plain questions:
 Option 1 estimates the cost for free (no API key, no charge). Options 2 and 3
 do the real cataloguing and need an Anthropic API key set on your machine.
 
-Nothing is ever moved or renamed. Results are written next to your library as
-catalog.json (the master file), catalog.csv (browsable), and review_queue.csv
-(only the items worth a human double-check).
+Results are written next to your library as catalog.json (the master file),
+catalog.csv (browsable), and review_queue.csv (only the items worth a human
+double-check). Cataloguing never moves or renames an image; only the sorter
+(option 5) moves files, and only after showing you its full plan first. Every
+sort is journaled and one option (6) undoes it.
 """
 
 import base64
@@ -67,6 +69,7 @@ CSV_COLUMNS = [
 from record_schema import SYSTEM, RECORD_TOOL
 from cleaning import clean_record
 from viewer import write_wiki
+from sorter import run_sort, undo_sort
 
 # --------------------------------------------------------------------------- helpers
 
@@ -460,7 +463,14 @@ def main():
     print("    2) Test run on 25 images  (small charge, to check quality)")
     print("    3) Full run on everything (the real thing)")
     print("    4) Build the HTML viewer from existing results (free)")
+    print("    5) Sort catalogued images into painter folders (shows a plan first)")
+    print("    6) Undo the last sort")
     choice = ask("  > ").strip()
+
+    def rebuild(cat):
+        save_json(out_dir / CATALOG_FILE, cat)
+        write_csvs(out_dir, cat)
+        write_wiki(out_dir, cat)
 
     if choice == "1":
         do_estimate(root, images, catalog)
@@ -488,6 +498,17 @@ def main():
             return
         limit = 25 if choice == "2" else None
         do_run(root, out_dir, images, catalog, model["id"], limit=limit)
+        return
+
+    if choice == "5":
+        if not catalog:
+            print("\n  No catalogue yet. Sorting is driven by it: run option 2 or 3 first.")
+            return
+        run_sort(lib_root, scan_root, catalog, recurse, rebuild)
+        return
+
+    if choice == "6":
+        undo_sort(lib_root, catalog, rebuild)
         return
 
     print("  Not a valid choice. Run it again.")

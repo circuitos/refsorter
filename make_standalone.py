@@ -20,7 +20,7 @@ SPLICE_COMMENT = (
     "# Imported below the settings on purpose: make_standalone.py splices each\n"
     "# module's source in at its import line, keeping the config at the top.\n"
 )
-_LOCAL_IMPORT = re.compile(r"^from (record_schema|cleaning|viewer) import .*\n", re.M)
+_LOCAL_IMPORT = re.compile(r"^from (record_schema|cleaning|viewer|sorter) import .*\n", re.M)
 _DOCSTRING = re.compile(r'\A("""|\'\'\')(?s:.*?)\1\n+')
 
 
@@ -52,6 +52,7 @@ def main():
         ("from record_schema import SYSTEM, RECORD_TOOL\n", banner("record schema") + module_body("record_schema")),
         ("from cleaning import clean_record\n", banner("record cleaning") + module_body("cleaning")),
         ("from viewer import write_wiki\n", banner("wiki viewer") + viewer_src),
+        ("from sorter import run_sort, undo_sort\n", banner("painter-folder sorter") + module_body("sorter")),
     ]:
         if out.count(line) != 1:
             raise SystemExit("expected exactly one line %r in catalog_refs.py" % line)

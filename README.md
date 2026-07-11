@@ -3,8 +3,10 @@
 Contextualises a folder of painter reference images. Point it at your library
 and it identifies each work with Claude's vision (via the Message Batches API,
 which costs half the normal rate), then builds a searchable offline wiki of
-the whole collection. Nothing is ever moved, renamed, or written over: your
-images are read, never touched.
+the whole collection. Cataloguing never moves, renames, or writes over an
+image: your files are read, never touched. The one thing that ever moves a
+file is the sorter (menu option 5), which only acts on a plan it has shown
+you first, and every sort can be undone in one step.
 
 ## What it produces
 
@@ -61,6 +63,9 @@ start a fresh one. The menu options:
    interrupted, run it again and it picks up where it left off. Anything
    that failed is simply retried on the next run.
 4. **Rebuild the viewer** from existing results. Free.
+5. **Sort catalogued images into painter folders.** Shows its full plan
+   first; nothing moves until you say so. See below.
+6. **Undo the last sort.** Replays the journal in reverse.
 
 The sensible order is 1, then 2, then 3.
 
@@ -69,6 +74,45 @@ library is in the $15 to $30 range. Option 1 gives you the real number for
 your folder before you spend anything. Model IDs and prices drift; both live
 at the top of `catalog_refs.py` as plain editable settings, with a note of
 when they were last checked.
+
+## Sorting into painter folders
+
+Cataloguing does the expensive looking; sorting is a cheap, deterministic file
+operation on top of it. Point the tool at a messy folder, catalogue it (option
+2 or 3), then choose option 5. It works in three stages:
+
+1. **Roster.** The unique artist names in scope are canonicalised (spelling
+   variants of one painter merge onto one name) and given birth/death years by
+   a single text-only API call — no images, well under a cent — cached forever
+   in `artists.json` at the library root. It is plain JSON: if a year is
+   wrong, edit it there and it stays fixed.
+2. **Plan.** Every proposed move is written to `sort_plan.csv` and summarised.
+   Nothing has moved yet. Open the CSV and delete any rows you disagree with,
+   then re-run option 5 and choose `a` to apply the edited plan.
+3. **Apply.** Files move, every operation is journaled to `sort_undo.json`,
+   the catalogue's paths are rewritten, and the CSVs and wiki are rebuilt so
+   no links break. Option 6 replays the journal in reverse.
+
+The rules it sorts by:
+
+- Folders are named in the library's existing convention:
+  `John Singer Sargent 1856-1925`, or `Dean Mitchell 1957-present` for living
+  painters, or the bare name when the years are not securely known.
+- New painter folders are created **inside the folder each image already
+  lives in** (its top-level subfolder of the scanned root), so grouping
+  folders like `! RUSSIANS` keep their meaning instead of dissolving.
+- Only records whose attribution is secure (`given` or `high` confidence)
+  move. Everything uncertain stays exactly where it is — those are the
+  `review_queue.csv` items.
+- A file already sitting in its painter's folder is left alone; a file
+  sitting in a *different* painter's folder is pulled out to the scanned
+  root's folder for its real painter.
+- Optionally, existing painter folders that lack years get them added
+  (`Anders Zorn` → `Anders Zorn 1860-1920`); folders whose years disagree
+  with the roster are only flagged, never auto-renamed. Folder renames are
+  journaled and undoable like everything else.
+- If two files would land in the folder with the same name, the newcomer gets
+  a ` (2)` suffix rather than overwriting. Emptied folders are left in place.
 
 ## Single-file version
 
@@ -89,6 +133,7 @@ identically to running from the repo.
 | `catalog_refs.py` | Entry point: settings, interactive menu, batch logic. |
 | `record_schema.py` | The system prompt, the tool schema, and the movement canon. |
 | `cleaning.py` | The repair pipeline every record passes through. |
+| `sorter.py` | The painter-folder sorter: roster, plan, apply, undo. |
 | `viewer.py` + `templates/wiki.html` | The offline wiki builder and its page template. |
 | `make_standalone.py` | Inlines everything into `dist/catalog_refs.py`. |
 
@@ -96,8 +141,11 @@ identically to running from the repo.
 
 These are deliberate. Changes should not break them.
 
-- Images are never moved, renamed, or overwritten. Outputs go into the
-  library root only.
+- Cataloguing never moves, renames, or overwrites an image. Outputs go into
+  the library root only. The sorter (`sorter.py`) is the single, explicit
+  exception: it moves files only from a plan the user has seen, journals
+  every operation to `sort_undo.json`, keeps the catalogue's paths in sync,
+  and can undo the whole sort in one step. Nothing else may move a file.
 - Image paths are stored relative to the library root, and a run on a subfolder
   grows the nearest existing library at or above it (`find_library_root`), so
   the whole tree shares one master catalogue and one viewer. Moving a library
