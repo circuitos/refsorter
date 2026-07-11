@@ -58,7 +58,7 @@ python catalog_refs.py
 
 It asks for the folder to catalogue, whether to include subfolders, and what to
 do. One catalogue can span a whole library: if the folder you point at sits
-inside a folder that already has a `catalog.json`, the tool grows that existing
+inside a folder that already has a catalogue, the tool grows that existing
 library instead of starting a separate one, so you can catalogue a subfolder at
 a time and everything lands in one master viewer at the root. You can also move
 an existing library to another folder (image links are fixed automatically) or
@@ -113,13 +113,13 @@ Cataloguing does the expensive looking; sorting is a cheap, deterministic file
 operation on top of it. Point the tool at a messy folder, catalogue it (option
 2 or 3), then choose option 5. It works in three stages:
 
-1. **Roster.** Painter identities come from the artist index above; any
+1. **Artist index.** Painter identities come from the index above; any
    names it does not know yet are looked up first. If a year is wrong, edit
    `artists.json` and it stays fixed.
 2. **Plan.** Every proposed move is written to `_database/sort_plan.csv` and summarised.
    Nothing has moved yet. Open the CSV and delete any rows you disagree with,
    then re-run option 5 and choose `a` to apply the edited plan.
-3. **Apply.** Files move, every operation is journaled to `sort_undo.json`,
+3. **Apply.** Files move, every operation is journaled to `_database/sort_undo.json`,
    the catalogue's paths are rewritten, and the CSVs and wiki are rebuilt so
    no links break. Option 6 replays the journal in reverse.
 
@@ -139,7 +139,7 @@ The rules it sorts by:
   root's folder for its real painter.
 - Optionally, existing painter folders that lack years get them added
   (`Anders Zorn` → `Anders Zorn 1860-1920`); folders whose years disagree
-  with the roster are only flagged, never auto-renamed. Folder renames are
+  with the artist index are only flagged, never auto-renamed. Folder renames are
   journaled and undoable like everything else.
 - If two files would land in the folder with the same name, the newcomer gets
   a ` (2)` suffix rather than overwriting. Emptied folders are left in place.
@@ -200,8 +200,8 @@ These are deliberate. Changes should not break them.
 - `MOVEMENT_CANON` and `MOVEMENT_INFO` stay in sync: every canon value has an
   info entry with years, blurb, and wiki slug ("Other" has null years/wiki).
 - Batches are chunked at 1,000 requests / 200 MB, the in-flight batch id is
-  persisted to `.catalog_state.json` for resume, and failed items are simply
-  absent from the catalogue so a re-run retries them.
+  persisted to `_database/.catalog_state.json` for resume, and failed items are
+  simply absent from the catalogue so a re-run retries them.
 - `max_tokens: 700` and the 60-word caps in the prompt are cost controls.
 - Paths with `! `, spaces, and backslashes are normal here. Test with them.
 - User data (catalogues, state, images) is never committed to this repo.

@@ -3,7 +3,7 @@
 Cataloguing (menu options 2/3) does the expensive vision work; sorting is a
 deterministic file operation on top of the catalogue, in three stages:
 
-  artist index  ->  plan (sort_plan.csv, nothing moves)  ->  apply (journaled)
+  artist index  ->  plan (_database/sort_plan.csv, nothing moves)  ->  apply (journaled)
 
 - Painter identities come from the artist database (artists.py / artists.json):
   name variants merge onto one canonical painter with birth/death years.
@@ -12,7 +12,7 @@ deterministic file operation on top of the catalogue, in three stages:
   being sorted, so grouping folders like "! RUSSIANS" keep their meaning.
 - Only records with a secure attribution (given/high confidence) move;
   everything else stays exactly where it is.
-- Applying writes sort_undo.json; menu option 6 replays it in reverse.
+- Applying writes _database/sort_undo.json; menu option 6 replays it in reverse.
 
 This module is the single, explicit exception to the rule that images are
 never moved: only here, only after showing the plan, always undoable.
@@ -305,7 +305,7 @@ def run_sort(lib_root, scan_root, catalog, recurse, rebuild):
                    and r.get("artist_confidence") in SORTABLE_CONFIDENCE})
     if not raws:
         print("\n  No securely attributed records under this folder; nothing safe to sort.")
-        print("  (Uncertain attributions are listed in %s.)" % "review_queue.csv")
+        print("  (Uncertain attributions are listed in %s.)" % os.path.join(DB_DIR, "review_queue.csv"))
         return
 
     roster = ensure_artists(lib_root, raws, folder_hints(scan_root))

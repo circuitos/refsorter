@@ -7,7 +7,8 @@ Just run it. It will ask you a couple of plain questions:
     python catalog_refs.py
 
 Option 1 estimates the cost for free (no API key, no charge). Options 2 and 3
-do the real cataloguing and need an Anthropic API key set on your machine.
+do the real cataloguing and need an Anthropic API key set on your machine;
+the sorter (option 5) needs it only when new painters must be looked up.
 
 Results are written into a _database folder at the library root: catalog.json
 (the master file), catalog.csv (browsable), review_queue.csv (items worth a
@@ -54,6 +55,8 @@ POLL_SECONDS = 20
 OVERHEAD_IN = 900         # rough per-image input overhead (system + tool schema + text)
 EST_OUT = 420             # rough per-image output tokens with the 60-word caps
 
+# All of these except WIKI_FILE live in the library's _database folder
+# (db_dir); wiki.html alone sits at the root so its relative image links work.
 STATE_FILE = ".catalog_state.json"
 CATALOG_FILE = "catalog.json"
 CATALOG_CSV = "catalog.csv"
@@ -494,7 +497,7 @@ def main():
     if finished:
         return
     root = lib_root        # image paths are stored relative to the library root
-    out_dir = lib_root     # the catalogue and viewer live at the library root
+    out_dir = lib_root     # outputs land in _database here (wiki.html at the root itself)
 
     sub = ask("  Include images inside subfolders too? [Y/n]\n  > ").strip().lower()
     recurse = not sub.startswith("n")

@@ -4,7 +4,9 @@ The page template lives in templates/wiki.html and is read when the viewer is
 built; the standalone build inlines it into WIKI_TEMPLATE instead. wiki.html
 must stay a single file that works over file:// with zero network
 dependencies. It references images by relative path, so it is always written
-into the library root.
+into the library root - the one file that lives there rather than in
+_database. The artist index (_database/artists.json) is injected alongside
+the records so every card can show its painter's bio.
 """
 
 import json

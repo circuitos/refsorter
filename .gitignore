@@ -1,7 +1,12 @@
-# Catalogue outputs and state. These belong in the image library, never here.
+# Catalogue outputs and state. These belong in the image library (in its
+# _database folder), never here.
+_database/
 catalog.json
 catalog.csv
 review_queue.csv
+artists.json
+sort_plan.csv
+sort_undo.json
 wiki.html
 !templates/wiki.html
 .catalog_state.json

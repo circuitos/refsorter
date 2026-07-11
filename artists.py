@@ -1,6 +1,6 @@
-"""The artist database: one entry per painter, stored in artists.json at the
-library root, shared by everything that needs to know about a painter rather
-than a painting.
+"""The artist database: one entry per painter, stored in artists.json inside
+the library's _database folder, shared by everything that needs to know about
+a painter rather than a painting.
 
 Each entry holds canonical name, birth/death years, nationality, primary
 movement, a single 60-word bio, and a Wikipedia title, plus an alias map that
