@@ -28,7 +28,10 @@ run.
 derived from it and can be rebuilt at any time for free (menu option 4).
 
 Each record holds: artist, confidence, title, date, movement, medium, subject,
-palette, composition notes, work-specific context, and search tags. Facts
+palette, composition notes, work-specific context, and search tags — plus
+provenance: `catalogued_by` names the model whose eyes made the record, and
+`reviewed_by` is set once a stronger model has re-checked it. Both show on
+the card in the wiki and are searchable (type "haiku" or "fable"). Facts
 about the *painter* (years, nationality, school, one bio) live once per
 artist in `artists.json`, not repeated per image — see "The artist index". Artist
 names found in your folder and file names are taken as ground truth; the model

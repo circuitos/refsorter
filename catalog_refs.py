@@ -67,6 +67,7 @@ CSV_COLUMNS = [
     "path", "artist", "artist_confidence", "attribution_source", "title",
     "title_confidence", "date_or_period", "movement", "movement_detail", "medium",
     "subject", "palette", "composition_notes", "context", "tags", "needs_review", "notes",
+    "catalogued_by", "reviewed_by",
 ]
 
 # Imported below the settings on purpose: make_standalone.py splices each
@@ -254,7 +255,7 @@ def wait_for_batch(client, batch_id):
         time.sleep(POLL_SECONDS)
 
 
-def merge_batch(client, batch_id, id_to_path, catalog):
+def merge_batch(client, batch_id, id_to_path, catalog, model_id):
     ok = failed = 0
     for entry in client.messages.batches.results(batch_id):
         rel = id_to_path.get(entry.custom_id)
@@ -266,6 +267,7 @@ def merge_batch(client, batch_id, id_to_path, catalog):
                 failed += 1
                 continue
             rec["path"] = rel
+            rec["catalogued_by"] = model_id  # provenance: which eyes made this record
             catalog[rel] = clean_record(rec)
             ok += 1
         else:
@@ -323,7 +325,7 @@ def do_run(root, out_dir, images, catalog, model, limit=None, largest_first=Fals
         print(f"Resuming an unfinished batch ({bid})...")
         try:
             wait_for_batch(client, bid)
-            ok, failed = merge_batch(client, bid, state["id_to_path"], catalog)
+            ok, failed = merge_batch(client, bid, state["id_to_path"], catalog, model_id)
             print(f"  recovered {ok} ({failed} to retry)")
             save_json(db_dir(out_dir) / CATALOG_FILE, catalog)
         except Exception as e:
@@ -383,7 +385,7 @@ def do_run(root, out_dir, images, catalog, model, limit=None, largest_first=Fals
         save_json(db_dir(out_dir) / STATE_FILE, {"pending_batch_id": batch.id, "id_to_path": id_to_path})
         try:
             wait_for_batch(client, batch.id)
-            ok, failed = merge_batch(client, batch.id, id_to_path, catalog)
+            ok, failed = merge_batch(client, batch.id, id_to_path, catalog, model_id)
         except Exception as e:
             print(f"\n  Lost contact with the running batch ({e}).")
             print("  Its id is saved; the next run recovers its results automatically.")

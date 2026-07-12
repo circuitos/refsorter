@@ -157,6 +157,8 @@ const INFO = __INFO__;
 const ARTISTS = __ARTISTS__;
 const ROOT = __ROOT__;
 const CONF = {given:'#8fb08a',high:'#8fb08a',medium:'#d08a3c',low:'#c56b5c',unknown:'#6f6c64'};
+const MODELNAMES = {'claude-fable-5':'Fable 5','claude-sonnet-5':'Sonnet 5','claude-haiku-4-5':'Haiku 4.5'};
+function modelLabel(s){return MODELNAMES[s]||String(s||'');}
 function normName(s){s=String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ');
   return s.replace(/[^\p{L}\p{N}_\s]/gu,'').replace(/\s+/g,' ').trim();}
 DATA.forEach(r=>{const c=r.artist&&(ARTISTS.aliases||{})[normName(r.artist)];
@@ -186,7 +188,8 @@ function matches(r){
   if(mv!=='all'&&r.movement!==mv)return false;
   if(!q)return true;
   const a=r._artist?[r._artist.name,r._artist.info.nationality,r._artist.info.movement,r._artist.info.bio].join(' '):'';
-  return [r.artist,r.title,r.movement,r.movement_detail,r.subject,r.palette,tagsOf(r).join(' '),r.context,a].join(' ').toLowerCase().includes(q);
+  const prov=[modelLabel(r.catalogued_by),modelLabel(r.reviewed_by)].join(' ');
+  return [r.artist,r.title,r.movement,r.movement_detail,r.subject,r.palette,tagsOf(r).join(' '),r.context,a,prov].join(' ').toLowerCase().includes(q);
 }
 function card(r,i){
   const who=esc(r.artist||'Unattributed');
@@ -240,7 +243,10 @@ function renderSide(){
     +about
     +(tags?detailRow('Tags',tags):'')
     +(r.notes?detailRow('Notes',esc(r.notes)):'')
-    +detailRow('File','<span class="path">'+esc(r.path)+'</span>')
+    +detailRow('File','<span class="path">'+esc(r.path)+'</span>'
+      +((r.catalogued_by||r.reviewed_by)?'<div style="font-size:11px;color:var(--faint);margin-top:4px">'
+        +esc([r.catalogued_by?('catalogued by '+modelLabel(r.catalogued_by)):'',
+              r.reviewed_by?('reviewed by '+modelLabel(r.reviewed_by)):''].filter(Boolean).join('  ·  '))+'</div>':''))
     +'<div class="navhint">\u2190 \u2192 previous / next work</div>'
     +'</div>';
 }
