@@ -89,7 +89,8 @@ input[type=text]::placeholder{color:var(--faint);}
 .tltrack{flex:1;position:relative;height:16px;}
 .tlbar{position:absolute;top:3px;height:10px;border-radius:5px;background:var(--brass);opacity:.55;cursor:pointer;min-width:6px;}
 .tlbar:hover{opacity:.95;}
-.tlaxis{display:flex;justify-content:space-between;margin-left:152px;font-size:10px;color:var(--faint);margin-top:4px;}
+.tlaxis2{position:relative;margin-left:152px;height:14px;margin-top:4px;}
+.tlaxis2 span{position:absolute;font-size:10px;color:var(--faint);white-space:nowrap;}
 .mvsec{border-top:1px solid var(--line);padding:20px 0 6px;}
 .mvhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
 .mvname{font-size:18px;font-weight:500;}
@@ -332,15 +333,38 @@ function renderStyles(){
   const dated=pres.filter(p=>p.info&&p.info.years);
   let tl='';
   if(dated.length>1){
-    const lo=Math.min(...dated.map(p=>p.info.years[0]));
     const hi=Math.min(2030,Math.max(...dated.map(p=>p.info.years[1])));
-    const span=Math.max(1,hi-lo);
+    /* Piecewise scale: stretches of the axis longer than CLAMP years with no
+       movement boundary in them are compressed, so one medieval work cannot
+       crush the crowded 19th-20th-century cluster into the right margin. */
+    const CLAMP=80;
+    const knots=Array.from(new Set(dated.flatMap(p=>[p.info.years[0],Math.min(p.info.years[1],hi)]))).sort((a,b)=>a-b);
+    const pos=[0];
+    for(let i=1;i<knots.length;i++)pos.push(pos[i-1]+Math.min(knots[i]-knots[i-1],CLAMP));
+    const total=pos[pos.length-1]||1;
+    function X(y){
+      if(y<=knots[0])return 0;
+      for(let i=1;i<knots.length;i++){
+        if(y<=knots[i]){
+          const f=(y-knots[i-1])/((knots[i]-knots[i-1])||1);
+          return (pos[i-1]+f*(pos[i]-pos[i-1]))/total*100;
+        }
+      }
+      return 100;
+    }
+    let ticks=[knots[0],knots[knots.length-1]];
+    for(let i=1;i<knots.length;i++)if(knots[i]-knots[i-1]>CLAMP)ticks.push(knots[i-1],knots[i]);
+    ticks=Array.from(new Set(ticks)).sort((a,b)=>a-b);
     tl='<div class="tl">'+dated.map(p=>{
-      const l=100*(p.info.years[0]-lo)/span, w=Math.max(1,100*(Math.min(p.info.years[1],hi)-p.info.years[0])/span);
+      const a=p.info.years[0], b=Math.min(p.info.years[1],hi);
+      const l=X(a), w=Math.max(1,X(b)-l);
       return '<div class="tlrow"><div class="tllabel" data-m="'+esc(p.m)+'">'+esc(p.m)+'</div>'
         +'<div class="tltrack"><div class="tlbar" data-m="'+esc(p.m)+'" title="'+esc(p.m)+' \u00b7 '+p.info.years[0]+'\u2013'+p.info.years[1]+'" style="left:'+l+'%;width:'+w+'%"></div></div></div>';
     }).join('')
-    +'<div class="tlaxis"><span>'+Math.min(...dated.map(p=>p.info.years[0]))+'</span><span>'+hi+'</span></div></div>';
+    +'<div class="tlaxis2">'+ticks.map((y,i)=>{
+      const sh=i===0?'0':(i===ticks.length-1?'-100%':'-50%');
+      return '<span style="left:'+X(y)+'%;transform:translateX('+sh+')">'+y+'</span>';
+    }).join('')+'</div></div>';
   }
   const secs=pres.map(p=>{
     const inf=p.info||{};
@@ -353,7 +377,7 @@ function renderStyles(){
       +'<div class="mvlinks">'+wp+aw+'<button class="showbtn" data-m="'+esc(p.m)+'">Show works \u2192</button></div>'
       +'</div>';
   }).join('');
-  el.innerHTML='<p style="color:var(--muted);font-size:13px;max-width:640px;margin:4px 0 18px;">The movements catalogued in this library, in rough chronological order. Bars show approximate active spans; movements overlap and bleed into each other, so treat edges as soft.</p>'+tl+secs;
+  el.innerHTML='<p style="color:var(--muted);font-size:13px;max-width:640px;margin:4px 0 18px;">The movements catalogued in this library, in rough chronological order. Bars show approximate active spans; movements overlap and bleed into each other, so treat edges as soft. Long empty stretches of the axis are compressed (see the year marks), so early eras don’t squash the crowded centuries.</p>'+tl+secs;
   el.querySelectorAll('.showbtn').forEach(b=>b.addEventListener('click',()=>{
     document.getElementById('mv').value=b.dataset.m;setView('works');renderGrid();
   }));
