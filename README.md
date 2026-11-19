@@ -8,6 +8,28 @@ image: your files are read, never touched. The one thing that ever moves a
 file is the sorter (menu option 5), which only acts on a plan it has shown
 you first, and every sort can be undone in one step.
 
+## Local visual index (no API, no tokens)
+
+`local_index.py` embeds every image with a CLIP model on your own GPU and lets
+you search the folder by concept ("spiral"), by example, or by keyword tag.
+Nothing leaves your machine and originals are never touched. It is meant for
+libraries that are not paintings (design, signage, posters ...), where the
+painter-centred catalogue does not fit.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+.\.venv\Scripts\python.exe -m pip install -r requirements-local.txt
+.\.venv\Scripts\python.exe local_index.py index  "D:\Dropbox\! REF\Design"
+.\.venv\Scripts\python.exe local_index.py search "D:\Dropbox\! REF\Design" spiral -n 80 --open
+.\.venv\Scripts\python.exe local_index.py tag    "D:\Dropbox\! REF\Design"
+```
+
+`index` saves a shard every 256 images, so you can stop it and re-run to resume
+(`--no-recurse` limits it to the files directly in the folder). `search` writes
+a thumbnail page to `_database\search_<query>.html`; combine `--avoid`, `--like`,
+`--folder` and `--tag`. `tag` assigns keywords from `design_vocab.json` (edit it
+freely) and writes `_database\clip_index	ags.csv`.
+
 ## What it produces
 
 Only `wiki.html` sits at the library root, next to your images — it has to,
