@@ -1,0 +1,101 @@
+{
+  "_comment": "Zero-shot vocabulary for local_index.py tag. label -> text prompt. Within a group the prompts compete (softmax), so a label is assigned only when it clearly beats the others. 'background' prompts catch images that match none of the labels. Edit freely, then re-run: tag.",
+  "groups": {
+    "motif": {
+      "mode": "multi",
+      "threshold": 0.25,
+      "max": 3,
+      "labels": {
+        "spiral": "a spiral",
+        "vortex-swirl": "a swirling vortex",
+        "concentric-circles": "concentric circles",
+        "radial-burst": "a radial sunburst pattern",
+        "circle-ring": "a large circle or ring",
+        "grid": "a strict grid of squares",
+        "halftone-dots": "halftone dots",
+        "wavy-lines": "flowing wavy lines",
+        "stripes": "bold stripes",
+        "tunnel-perspective": "a tunnel receding into perspective",
+        "op-art": "an optical illusion op art pattern",
+        "mandala-kaleidoscope": "a symmetric mandala or kaleidoscope",
+        "maze": "a labyrinth or maze",
+        "fractal": "a fractal pattern",
+        "geometric-shapes": "overlapping geometric shapes"
+      },
+      "background": [
+        "a photograph of a scene",
+        "a layout made of text and images",
+        "a plain composition with no repeating pattern"
+      ]
+    },
+    "type": {
+      "mode": "single",
+      "threshold": 0.30,
+      "max": 1,
+      "labels": {
+        "poster": "a poster design",
+        "logo": "a logo design",
+        "signage": "a sign or wayfinding signage",
+        "typography": "typography and lettering",
+        "infographic": "an infographic or data visualization",
+        "book-cover": "a book cover",
+        "packaging": "product packaging",
+        "graffiti": "graffiti or street art",
+        "collage": "a collage",
+        "glitch-art": "glitch art",
+        "album-cover": "an album cover",
+        "interface": "a website or app interface",
+        "editorial-layout": "a magazine or editorial layout",
+        "photograph": "a photograph",
+        "illustration": "an illustration",
+        "pattern": "a decorative pattern or ornament",
+        "trading-card": "a trading card",
+        "sticker": "a sticker",
+        "billboard-led": "a billboard or LED screen design",
+        "film-still": "a film still"
+      }
+    },
+    "style": {
+      "mode": "multi",
+      "threshold": 0.25,
+      "max": 2,
+      "labels": {
+        "minimalist": "minimalist design",
+        "brutalist": "brutalist graphic design",
+        "swiss-modernist": "Swiss international style design",
+        "psychedelic": "psychedelic art",
+        "retro-vintage": "retro vintage design",
+        "futuristic-cyber": "futuristic cyberpunk design",
+        "y2k": "Y2K aesthetic design",
+        "art-deco": "art deco design",
+        "constructivist": "constructivist propaganda design",
+        "grunge": "grunge distressed design",
+        "maximalist": "maximalist busy design",
+        "vaporwave": "vaporwave aesthetic",
+        "bauhaus": "Bauhaus design",
+        "memphis": "Memphis style design",
+        "surreal": "surreal imagery"
+      },
+      "background": [
+        "a neutral, unremarkable design"
+      ]
+    },
+    "color": {
+      "mode": "multi",
+      "threshold": 0.25,
+      "max": 2,
+      "labels": {
+        "black-and-white": "a black and white image",
+        "red": "an image dominated by red",
+        "blue": "an image dominated by blue",
+        "yellow": "an image dominated by yellow",
+        "green": "an image dominated by green",
+        "pink-purple": "an image dominated by pink and purple",
+        "pastel": "a pastel colour palette",
+        "neon": "neon colours on dark",
+        "earth-tones": "earth tones, brown and beige",
+        "high-contrast": "a high contrast two-colour image"
+      }
+    }
+  }
+}

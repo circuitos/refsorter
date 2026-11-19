@@ -26,3 +26,6 @@ dist/
 
 __pycache__/
 *.pyc
+
+# Local virtual environments.
+.venv/

@@ -1,0 +1,7 @@
+# Local (no-API) visual index: local_index.py
+# Install PyTorch FIRST with the CUDA build that matches your GPU. RTX 50-series
+# (Blackwell) needs cu128 or newer:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+open_clip_torch
+numpy
+Pillow
